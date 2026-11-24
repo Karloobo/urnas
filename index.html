@@ -68,7 +68,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '1.0';
+var VERSION = '1.1';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -166,7 +166,7 @@ function enviarPendientes(){
     .withFailureHandler(function(err){
       enviando=false;
       var msg=String(err&&err.message||err);
-      if(/cantidad|no válido|No encuentro/i.test(msg)){ /* error de datos: se descarta para no trabar la cola */
+      if(/cantidad|no válid|No encuentro/i.test(msg)){ /* error de datos: se descarta para no trabar la cola */
         var c3=cola().filter(function(r){return r.id!==rec.id;}); setCola(c3);
         alert('Un registro no se pudo guardar: '+msg);
       } else { enLinea=false; pintarEstado(); }
@@ -213,6 +213,7 @@ function menu(){
   h+='<button class="big b1" onclick="lotes()">🔨<span>Avance de un lote<small>Terminé una fase</small></span></button>'+
      '<button class="big b2" onclick="estante()">📦<span>Tomé piezas del estante<small>Saqué piezas para trabajar</small></span></button>'+
      '<button class="big b2" onclick="corte()">🪚<span>Corté piezas<small>Dejé piezas nuevas en el estante</small></span></button>'+
+     (S.datos.almacen?'<button class="big b2" onclick="almacen()">🎨<span>Tomé material del almacén<small>Pintura o ferretería</small></span></button>':'')+
      '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-top:8px">'+
      '<button class="link" onclick="elegirNombre()">No soy '+esc(S.nombre)+'</button>'+
      '<button class="link" onclick="S.papel=true;menu()">Pasar hoja de papel</button>'+
@@ -285,9 +286,9 @@ function detalle(i,pieza){
   pantalla(h);
 }
 function stepper(id,v){
-  return '<div class="step"><button onclick="paso(\''+id+'\',-1)">−</button><input type="number" inputmode="numeric" id="'+id+'" value="'+v+'" min="0"><button onclick="paso(\''+id+'\',1)">+</button></div>';
+  return '<div class="step"><button onclick="paso(\''+id+'\',-1)">−</button><input type="number" inputmode="decimal" step="any" id="'+id+'" value="'+v+'" min="0"><button onclick="paso(\''+id+'\',1)">+</button></div>';
 }
-function paso(id,d){ var e=$(id); e.value=Math.max(0,(parseInt(e.value,10)||0)+d); }
+function paso(id,d){ var e=$(id); e.value=Math.max(0,Math.round(((parseFloat(e.value)||0)+d)*100)/100); }
 function fechaRegistro(){
   if(S.papel && $('fh') && $('fh').value) return new Date($('fh').value).toISOString();
   return new Date().toISOString();
@@ -344,6 +345,38 @@ function guardarCorte(){
   encolar({ id:uid(), tipo:'corte', nombre:S.nombre, ts:fechaRegistro(), piezaCorte:pc, cantidad:cant, hojas:hojas||'', oc:$('oc').value }, pc+' · '+cant+' piezas', 'corte');
 }
 
+/* ---------- almacén (pintura y ferretería) ---------- */
+function almacen(area){
+  S.area=area||S.area||'Pintura';
+  var h='<button class="back" onclick="menu()">← Inicio</button><h2>Tomé material del almacén</h2><div class="seg">';
+  ['Pintura','Ferretería'].forEach(function(a){ h+='<button class="'+(S.area===a?'on':'')+'" onclick="almacen(\''+a+'\')">'+(a==='Pintura'?'🎨 ':'🔩 ')+a+'</button>'; });
+  h+='</div><label>¿Qué material?</label><input type="text" placeholder="Busca: laca, lija, thinner…" oninput="filtrarAlmacen(this.value)">'+
+     '<select id="art" size="7" style="margin-top:8px" onchange="infoArt()"></select><div id="infoArt" class="sug"></div>'+
+     '<label>¿Cuánto tomaste?</label>'+stepper('cant',1)+
+     '<label>¿Para qué? (opcional)</label><input type="text" id="uso" maxlength="120" placeholder="Ej. pedido OC1655, casitas chocolate">';
+  if(S.papel) h+='<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
+  h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarAlmacen()">✔ Registrar</button></div>';
+  pantalla(h); filtrarAlmacen('');
+}
+function articulos(){ return (S.datos.almacen&&S.datos.almacen[S.area])||[]; }
+function filtrarAlmacen(f){
+  f=(f||'').toLowerCase(); var h='';
+  articulos().forEach(function(x,i){ if(f && x.op.toLowerCase().indexOf(f)<0) return;
+    var marca=x.estado==='CRÍTICO'?'🔴 ':(x.estado==='POR AGOTARSE'?'🟡 ':'');
+    h+='<option value="'+i+'">'+esc(marca+x.nombre+' · quedan '+x.existencia+' '+x.unidad)+'</option>'; });
+  $('art').innerHTML=h||'<option disabled>No hay artículos con ese nombre</option>'; infoArt();
+}
+function infoArt(){ var x=articulos()[$('art').value]; $('infoArt').textContent = x ? (x.codigo+' · unidad: '+x.unidad) : ''; }
+function guardarAlmacen(){
+  var x=articulos()[$('art').value], cant=parseFloat($('cant').value)||0;
+  if(!x){ $('err').textContent='Elige el material que tomaste.'; return; }
+  if(cant<=0){ $('err').textContent='Escribe cuánto tomaste (más de 0).'; return; }
+  if(cant>x.existencia && x.existencia>0 && !confirm('En el sistema solo quedan '+x.existencia+' '+x.unidad+'. ¿Seguro que tomaste '+cant+'?')) return;
+  x.existencia=Math.round((x.existencia-cant)*100)/100; guardar('datos',S.datos);
+  encolar({ id:uid(), tipo:'almacen', nombre:S.nombre, ts:fechaRegistro(), area:S.area, articulo:x.op, cantidad:cant, uso:$('uso').value.trim() },
+          x.nombre+' · '+cant+' '+x.unidad, 'almacen');
+}
+
 /* Todo registro pasa primero por el celular: si no hay internet, ahí se queda hasta que se pueda enviar */
 function encolar(rec, resumen, tipo){
   var c=cola(); c.push(rec); setCola(c);
@@ -355,7 +388,7 @@ function encolar(rec, resumen, tipo){
     .withSuccessHandler(function(){ setCola(cola().filter(function(r){return r.id!==rec.id;})); enLinea=true; pintarEstado(); confirmar(true,resumen); enviarPendientes(); })
     .withFailureHandler(function(err){
       var msg=String(err&&err.message||err);
-      if(/cantidad|no válido|No encuentro/i.test(msg)){ setCola(cola().filter(function(r){return r.id!==rec.id;})); pantalla('<div class="card err">No se guardó: '+esc(msg)+'</div><button class="big b2" onclick="menu()">Volver</button>'); return; }
+      if(/cantidad|no válid|No encuentro/i.test(msg)){ setCola(cola().filter(function(r){return r.id!==rec.id;})); pantalla('<div class="card err">No se guardó: '+esc(msg)+'</div><button class="big b2" onclick="menu()">Volver</button>'); return; }
       enLinea=false; pintarEstado(); confirmar(false,resumen);
     })
     .registrar(rec);
@@ -368,6 +401,7 @@ function confirmar(enviado,resumen){
   if(S.ultimo==='avance' && i>=0){ h+='<button class="big b1" onclick="detalle('+i+')">Registrar otra fase de este lote</button><button class="big b2" onclick="lotes()">Otro lote</button>'; }
   else if(S.ultimo==='estante'){ h+='<button class="big b1" onclick="estante()">Tomé otra pieza</button>'; }
   else if(S.ultimo==='corte'){ h+='<button class="big b1" onclick="corte()">Corté otra pieza</button>'; }
+  else if(S.ultimo==='almacen'){ h+='<button class="big b1" onclick="almacen()">Tomé otro material</button>'; }
   h+='<button class="big b2" onclick="menu()">Inicio</button>';
   pantalla(h);
 }
