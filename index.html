@@ -58,6 +58,12 @@
   .puntos span.on{background:#1c4587}
   .teclado{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:320px;margin:10px auto}
   .teclado button{padding:18px 0;font-size:26px;font-weight:bold;background:#fff;border:1px solid #d1d5db}
+  .oc.pedido{font-size:14px;color:#1c4587;margin-top:16px}
+  .oc.semana{background:#e6f1fb;color:#0c447c;padding:6px 10px;border-radius:8px;margin:8px 0 6px}
+  .oc.semana span{font-weight:normal;color:#4b5563}
+  .pista{margin-top:10px}
+  .ok-lote{background:#d9ead3;color:#274e13;padding:10px 12px;border-radius:12px;font-size:15px}
+  .ok-lote.parcial{background:#fff2cc;color:#7f6000}
   .opc{padding:12px 14px;margin-bottom:6px}
   .opc.n-rojo,.elegido.n-rojo{border-left:6px solid #cc0000}
   .opc.n-amarillo,.elegido.n-amarillo{border-left:6px solid #f1c232}
@@ -83,7 +89,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '1.4';
+var VERSION = '1.5';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -150,7 +156,7 @@ function setCola(c){ guardar('cola',c); pintarEstado(); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 function uid(){ return Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9); }
 function $(id){ return document.getElementById(id); }
-function pantalla(html){ $('app').innerHTML=html; window.scrollTo(0,0); }
+function pantalla(html){ S.alCambiar=null; $('app').innerHTML=html; window.scrollTo(0,0); }
 function corto(f){ return String(f).replace(/\s*\([^)]*\)\s*$/,''); }
 function tagEstado(e){ var k=String(e||'').slice(0,3); return '<span class="tag t-'+esc(k)+'">'+esc(e||'')+'</span>'; }
 function ahoraLocal(){ var d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,16); }
@@ -314,34 +320,114 @@ function actualizar(){ pantalla('<p>Actualizando…</p>'); cargarDatos(inicio); 
 
 function lotes(filtro){
   filtro=(filtro||'').toLowerCase();
-  var h='<button class="back" onclick="menu()">← Inicio</button><h2>¿Qué lote?</h2><p class="sub">Busca el nombre que dice la tarjeta</p>'+
+  var h='<button class="back" onclick="menu()">← Inicio</button>'+
+        (S.datos.renglones?'<button class="big b3" onclick="empacado()">📦<span>Empacado<small>Registrar urnas empacadas para entrega</small></span></button>':'')+
+        '<h2>¿Qué lote?</h2><p class="sub">Busca el nombre que dice la tarjeta</p>'+
         '<input type="text" id="busca" placeholder="Ej. Casita chocolate" value="'+esc(filtro)+'" oninput="filtrarLotes(this.value)">'+
         '<div id="listaLotes" style="margin-top:10px"></div>';
   pantalla(h); filtrarLotes(filtro);
 }
 function filtrarLotes(f){
-  f=(f||'').toLowerCase();
-  var porOc={}, h='';
+  f=norm(f).split(/\s+/).filter(Boolean);
+  var grupos={}, orden=[], h='';
   S.datos.lotes.forEach(function(l,i){
-    if(f && l.folio.toLowerCase().indexOf(f)<0) return;
-    (porOc[l.oc]=porOc[l.oc]||[]).push(i);
+    var t=norm(l.folio); if(f.length && !f.every(function(w){ return t.indexOf(w)>=0; })) return;
+    var k=l.oc+'|'+l.semana; if(!grupos[k]){ grupos[k]=[]; orden.push(k); } grupos[k].push(i);
   });
-  Object.keys(porOc).forEach(function(oc){
-    h+='<div class="oc">PEDIDO '+esc(oc)+'</div>';
-    porOc[oc].forEach(function(i){
+  orden.sort(function(a,b){ var A=a.split('|'),B=b.split('|'); return A[0]===B[0] ? (Number(A[1])||0)-(Number(B[1])||0) : (A[0]<B[0]?-1:1); });
+  var ocAnt=null;
+  orden.forEach(function(k){
+    var p=k.split('|'), ids=grupos[k], tot=0, emp=0;
+    ids.forEach(function(i){ tot+=S.datos.lotes[i].cantidad; emp+=Math.min(S.datos.lotes[i].empacadas||0,S.datos.lotes[i].cantidad); });
+    if(p[0]!==ocAnt){ h+='<div class="oc pedido">PEDIDO '+esc(p[0])+'</div>'; ocAnt=p[0]; }
+    h+='<div class="oc semana">SEMANA '+esc(p[1])+' <span>· '+tot+' urnas · empacadas '+emp+'</span></div>';
+    ids.forEach(function(i){
       var l=S.datos.lotes[i], av=[];
-      PIEZAS.forEach(function(p){ var v=l.av[p[0]]; if(v && v!=='—' && v!=='No aplica') av.push(p[1]+': '+v); });
+      PIEZAS.forEach(function(pz){ var v=l.av[pz[0]]; if(v && v!=='—' && v!=='No aplica') av.push(pz[1]+': '+v); });
       h+='<button class="lote" onclick="detalle('+i+')"><b>'+esc(corto(l.folio))+'</b>'+tagEstado(l.estado)+
-         '<span>'+l.cantidad+' piezas · semana '+esc(l.semana)+'</span><span>'+(av.length?esc(av.join(' · ')):'Sin avance registrado')+'</span></button>';
+         '<span>'+l.cantidad+' piezas'+(l.empacadas?' · empacadas '+Math.min(l.empacadas,l.cantidad):'')+'</span><span>'+(av.length?esc(av.join(' · ')):'Sin avance registrado')+'</span></button>';
     });
   });
   $('listaLotes').innerHTML = h || '<div class="card">No hay lotes con ese nombre. Revisa que el pedido esté <b>Activo</b> o toca "Actualizar datos".</div>';
+}
+
+/* ---------- empacado ---------- */
+function semanaHoy(oc, fecha){
+  var p=(S.datos.pedidos||[]).filter(function(x){ return x.oc===oc; })[0];
+  if(!p || !p.inicio) return '';
+  var i=new Date(p.inicio), d=fecha?new Date(fecha):new Date();
+  var a=Date.UTC(i.getFullYear(),i.getMonth(),i.getDate()), b=Date.UTC(d.getFullYear(),d.getMonth(),d.getDate());
+  return Math.max(1, Math.floor(Math.round((b-a)/86400000)/7)+1);
+}
+function lotesDe(r){
+  return S.datos.lotes.filter(function(l){ return l.oc===r.oc && l.modelo===r.modelo && (l.color===r.color || (!r.color && (l.color==='—'||!l.color))); })
+    .sort(function(a,b){ var na=+(a.folio.match(/#(\d+)/)||[0,0])[1], nb=+(b.folio.match(/#(\d+)/)||[0,0])[1]; return na-nb; });
+}
+/* Reparte la cantidad en los lotes del modelo, en orden (#1, #2…) */
+function repartir(r, cant){
+  var res=[], resto=cant;
+  lotesDe(r).forEach(function(l){
+    var falta=l.cantidad-Math.min(l.empacadas||0,l.cantidad);
+    if(resto<=0 || falta<=0) return;
+    var toma=Math.min(falta,resto); res.push({lote:l, toma:toma, falta:falta}); resto-=toma;
+  });
+  return {partes:res, sobra:resto};
+}
+function empacado(oc){
+  var ocs=(S.datos.ocs||[]); S.ocEmp=oc||S.ocEmp||ocs[0];
+  if(ocs.indexOf(S.ocEmp)<0) S.ocEmp=ocs[0];
+  var h='<button class="back" onclick="lotes()">← Lotes</button><h2>📦 Empacado</h2><p class="sub">Registra las urnas que empacaste para entregar</p>';
+  if(ocs.length>1){ h+='<label>Pedido</label><div class="seg">'; ocs.forEach(function(o){ h+='<button class="'+(o===S.ocEmp?'on':'')+'" onclick="empacado(\''+esc(o)+'\')">'+esc(o)+'</button>'; }); h+='</div>'; }
+  var items=(S.datos.renglones||[]).filter(function(r){ return r.oc===S.ocEmp; }).map(function(r,i){
+    var falta=Math.max(0,r.aProducir-r.empacadas);
+    return {val:r, titulo:r.desc||r.modelo, sub:r.codigo+' · empacadas '+r.empacadas+' de '+r.aProducir+(falta?'':' ✔'), extra:r.modelo+' '+r.color};
+  });
+  var sem=semanaHoy(S.ocEmp);
+  h+='<label>¿Qué modelo empacaste?</label>'+buscador('mod','Escribe: casa, clásica, chocolate…',items)+
+     '<label>¿Cuántas empacaste?</label>'+stepper('cant',0)+
+     '<div id="pista" class="pista"></div>'+
+     (sem?'<div class="sub" style="margin-top:8px">Se entrega en la <b>Semana '+sem+'</b> del pedido '+esc(S.ocEmp)+'</div>':'')+
+     '<label>Comentario (opcional)</label><input type="text" id="com" maxlength="200">';
+  if(S.papel) h+=quienHtml()+'<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
+  h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarEmpacado()">✔ Registrar</button></div>';
+  pantalla(h);
+  S.pick.mod.alElegir=function(x){ var rp=repartir(x.val, 1e9); $('cant').value = rp.partes.length ? rp.partes[0].falta : 0; pista(); };
+  S.alCambiar=pista; $('cant').oninput=pista;
+}
+function pista(){
+  var x=elegido('mod'), el=$('pista'); if(!el) return;
+  if(!x){ el.innerHTML=''; return; }
+  var cant=parseInt($('cant').value,10)||0; if(cant<=0){ el.innerHTML=''; return; }
+  var rp=repartir(x.val,cant), p=rp.partes, h='';
+  if(!p.length) h='<div class="warn">Este modelo ya no tiene lotes pendientes de empacar. Si son extras o reposiciones, escríbelo en el comentario.</div>';
+  else {
+    var a=p[0], n=a.lote.folio, s=' (Semana '+esc(a.lote.semana)+')';
+    if(p.length===1 && a.toma===a.falta) h='<div class="ok-lote">✅ Con esto se completa el lote <b>'+esc(corto(n))+'</b>'+s+'</div>';
+    else if(p.length===1) h='<div class="ok-lote parcial">Van para el lote <b>'+esc(corto(n))+'</b>'+s+'. Faltarán <b>'+(a.falta-a.toma)+'</b> para completarlo.</div>';
+    else h='<div class="ok-lote">✅ Completa el lote <b>'+esc(corto(n))+'</b>'+s+' y '+p.slice(1).map(function(q){ return '<b>'+q.toma+'</b> van al lote <b>'+esc(corto(q.lote.folio))+'</b> (Semana '+esc(q.lote.semana)+')'; }).join(', ')+'.</div>';
+    if(rp.sobra>0) h+='<div class="warn">'+rp.sobra+' son más de lo que falta por empacar de este modelo. Revisa la cantidad.</div>';
+  }
+  el.innerHTML=h;
+}
+function guardarEmpacado(){
+  var x=elegido('mod'), cant=parseInt($('cant').value,10)||0;
+  if(!x){ $('err').textContent='Elige el modelo que empacaste.'; return; }
+  if(cant<=0){ $('err').textContent='Escribe cuántas empacaste (más de 0).'; return; }
+  var r=x.val, rp=repartir(r,cant);
+  if(rp.sobra>0 && !confirm('Pusiste '+cant+' pero solo faltan '+(cant-rp.sobra)+' por empacar de este modelo. ¿Registrar de todos modos?')) return;
+  var fecha=fechaRegistro();
+  var rec={ id:uid(), tipo:'empacado', nombre:S.nombre, ts:fecha, oc:r.oc, codigo:r.codigo, desc:r.desc, cantidad:cant,
+            lote:rp.partes.map(function(q){ return q.lote.folio; }).join(', '), semana:semanaHoy(r.oc,fecha), comentario:$('com').value.trim() };
+  r.empacadas+=cant; rp.partes.forEach(function(q){ q.lote.empacadas=(q.lote.empacadas||0)+q.toma; if(q.lote.empacadas>=q.lote.cantidad) q.lote.estado='Terminado'; });
+  guardar('datos',S.datos);
+  encolar(rec, (r.desc||r.modelo)+' · '+cant+' empacadas'+(rec.semana?' · Semana '+rec.semana:''), 'empacado');
 }
 
 /* Fases que aplican a este lote (sin las de techo si el modelo no lleva techo) */
 function fasesDe(l,pieza){
   var lista=S.datos.fases[pieza]||[];
   if(pieza==='Wakal' && !l.techo) lista=lista.filter(function(f){ return !/techo/i.test(f); });
+  if(S.datos.faseEmpaque) lista=lista.filter(function(f){ return f!==S.datos.faseEmpaque; });
   return lista;
 }
 function sugerida(l,pieza){
@@ -376,7 +462,7 @@ function detalle(i,pieza){
 function stepper(id,v){
   return '<div class="step"><button onclick="paso(\''+id+'\',-1)">−</button><input type="number" inputmode="decimal" step="any" id="'+id+'" value="'+v+'" min="0"><button onclick="paso(\''+id+'\',1)">+</button></div>';
 }
-function paso(id,d){ var e=$(id); e.value=Math.max(0,Math.round(((parseFloat(e.value)||0)+d)*100)/100); }
+function paso(id,d){ var e=$(id); e.value=Math.max(0,Math.round(((parseFloat(e.value)||0)+d)*100)/100); if(S.alCambiar) S.alCambiar(); }
 function fechaRegistro(){
   if(S.papel && $('fh') && $('fh').value) return new Date($('fh').value).toISOString();
   return new Date().toISOString();
@@ -427,8 +513,9 @@ function elegir(id,i){
     (n?'<div class="semaforo">'+n[1]+' '+n[2]+(x.queda!=null?' · quedan '+esc(x.queda):'')+'</div>':'')+
     '<button class="link" onclick="cambiar(\''+id+'\')">Cambiar</button></div>';
   if($('err')) $('err').textContent='';
+  if(P.alElegir) P.alElegir(x);
 }
-function cambiar(id){ S.pick[id].sel=null; $(id+'_sel').innerHTML=''; $(id+'_buscar').className=''; $(id+'_q').focus&&$(id+'_q').focus(); pintarOpciones(id); }
+function cambiar(id){ S.pick[id].sel=null; if($('pista')) $('pista').innerHTML=''; $(id+'_sel').innerHTML=''; $(id+'_buscar').className=''; $(id+'_q').focus&&$(id+'_q').focus(); pintarOpciones(id); }
 function elegido(id){ var P=S.pick&&S.pick[id]; return P&&P.sel!=null ? P.items[P.sel] : null; }
 
 function estante(){
@@ -527,6 +614,7 @@ function confirmar(enviado,resumen){
   if(S.ultimo==='avance' && i>=0){ h+='<button class="big b1" onclick="detalle('+i+')">Registrar otra fase de este lote</button><button class="big b2" onclick="lotes()">Otro lote</button>'; }
   else if(S.ultimo==='estante'){ h+='<button class="big b1" onclick="estante()">Tomé otra pieza</button>'; }
   else if(S.ultimo==='corte'){ h+='<button class="big b1" onclick="corte()">Corté otra pieza</button>'; }
+  else if(S.ultimo==='empacado'){ h+='<button class="big b1" onclick="empacado()">Registrar otro empacado</button>'; }
   else if(S.ultimo==='almacen'){ h+='<button class="big b1" onclick="almacen()">Tomé otro material</button>'; }
   h+='<button class="big b2" onclick="menu()">Inicio</button>';
   pantalla(h);
