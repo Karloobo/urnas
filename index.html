@@ -63,6 +63,18 @@
   .modal h3{margin:0 0 4px;font-size:20px}
   .modal .linea{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid #eef0f3;font-size:16px}
   .modal .linea b{font-size:18px;text-align:right}
+  .mas{margin-top:12px}
+  .chico{padding:12px 8px;font-size:14px;font-weight:bold}
+  .chico.enc{background:#fff2cc;border:1px solid #ffe599;color:#7f6000}
+  .bR{background:#cc0000;color:#fff}
+  button.bR.chico{padding:8px 12px;border-radius:10px}
+  .reg{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .card.reg{margin-bottom:8px}
+  .tachado{opacity:.55;text-decoration:line-through}
+  .prob{border-top:1px solid #eef0f3;padding:8px 0}
+  textarea{width:100%;font:inherit;padding:12px;border:1px solid #d1d5db;border-radius:12px}
+  label.foto{display:block;text-align:center;padding:14px;border:2px dashed #9ca3af;border-radius:12px;color:#1c4587;font-weight:bold;font-size:16px}
+  label.foto input{display:none}
   .avance{margin-top:14px}
   .av-tit{font-size:14px;color:#4b5563;margin-bottom:8px}
   .av-fila{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:14px}
@@ -104,7 +116,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '1.7';
+var VERSION = '1.8';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -129,6 +141,9 @@ Runner.prototype._go=function(accion,rec){ var me=this;
   llamarApi(accion,rec).then(function(r){ me.ok&&me.ok(r); }, function(e){ me.fail&&me.fail(e); }); };
 Runner.prototype.getData=function(){ this._go('datos'); };
 Runner.prototype.registrar=function(rec){ this._go('registrar',rec); };
+Runner.prototype.anular=function(rec){ this._go('anular',rec); };
+Runner.prototype.panel=function(rec){ this._go('panel',rec); };
+Runner.prototype.resolver=function(rec){ this._go('resolver',rec); };
 var google={script:{}};
 Object.defineProperty(google.script,'run',{get:function(){ return new Runner(); }});
 
@@ -166,6 +181,13 @@ function guardar(k,v){ try{ localStorage.setItem('urnas_'+k, JSON.stringify(v));
 function leer(k,def){ try{ var v=localStorage.getItem('urnas_'+k); return v?JSON.parse(v):def; }catch(e){ return MEM[k]!==undefined?MEM[k]:def; } }
 function cola(){ return leer('cola',[]); }
 function setCola(c){ guardar('cola',c); pintarEstado(); }
+/* Historial de lo que se registró en este celular (para "Mis registros de hoy") */
+function hist(){ return leer('hist',[]); }
+function histMarcar(id,estado){ var h=hist(); h.forEach(function(x){ if(x.id===id) x.estado=estado; }); guardar('hist',h); }
+function histAgregar(rec,resumen){
+  var lim=Date.now()-3*86400000, h=hist().filter(function(x){ return x.t>lim; });
+  h.push({ id:rec.id, tipo:rec.tipo, nombre:rec.nombre, por:S.nombre, resumen:resumen, t:Date.now(), estado:'pendiente' }); guardar('hist',h);
+}
 
 /* ---------- utilidades ---------- */
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
@@ -207,12 +229,12 @@ function enviarPendientes(){
   enviando=true;
   var rec=c[0];
   google.script.run
-    .withSuccessHandler(function(){ var c2=cola().filter(function(r){return r.id!==rec.id;}); setCola(c2); enLinea=true; enviando=false; enviarPendientes(); })
+    .withSuccessHandler(function(){ var c2=cola().filter(function(r){return r.id!==rec.id;}); setCola(c2); histMarcar(rec.id,'enviado'); enLinea=true; enviando=false; enviarPendientes(); })
     .withFailureHandler(function(err){
       enviando=false;
       var msg=String(err&&err.message||err);
       if(/cantidad|no válid|No encuentro/i.test(msg)){ /* error de datos: se descarta para no trabar la cola */
-        var c3=cola().filter(function(r){return r.id!==rec.id;}); setCola(c3);
+        var c3=cola().filter(function(r){return r.id!==rec.id;}); setCola(c3); histMarcar(rec.id,'rechazado');
         alert('Un registro no se pudo guardar: '+msg);
       } else { enLinea=false; pintarEstado(); }
     })
@@ -327,6 +349,8 @@ function menu(){
      '<button class="link" onclick="salir()">No soy '+esc(S.nombre)+' (salir)</button>'+
      '<button class="link" onclick="S.papel=true;menu()">Pasar hoja de papel</button>'+
      '<button class="link" onclick="actualizar()">Actualizar datos</button></div>';
+  h+='<div class="grid2 mas"><button class="b2 chico" onclick="misRegistros()">🧾 Mis registros de hoy</button><button class="b2 chico" onclick="problema()">⚠️ Reportar un problema</button>'+
+     (esAdmin()?'<button class="b2 chico enc" onclick="panelEncargado()">📊 Panel del encargado</button>'+(S.datos.almacen?'<button class="b2 chico enc" onclick="entrada()">📥 Llegó material</button>':''):'')+'</div>';
   h+=barrasAvance();
   if(!esInstalada() && (promptInstalar || esIphone())) h+='<button class="big b4" onclick="instalar()">📲<span>Instalar la app en este celular<small>Para abrirla aunque no haya internet</small></span></button>';
   h+='<div class="ver">Versión '+VERSION+(S.datos&&S.datos.actualizado?' · datos del '+new Date(S.datos.actualizado).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'')+'</div>';
@@ -667,12 +691,13 @@ function guardarAlmacen(){
 }
 
 /* Pregunta "¿Estás seguro?" antes de guardar cualquier cantidad capturada a mano */
-function preguntar(lineas, avisos, ok){
+function preguntar(lineas, avisos, ok, op){
+  op=op||{};
   var d=document.createElement('div'); d.className='modal'; d.id='modal';
-  d.innerHTML='<div class="caja"><h3>¿Estás seguro?</h3><p class="sub">Revisa que la cantidad sea correcta</p>'+
+  d.innerHTML='<div class="caja"><h3>'+esc(op.titulo||'¿Estás seguro?')+'</h3><p class="sub">'+esc(op.sub||'Revisa que la cantidad sea correcta')+'</p>'+
     lineas.map(function(x){ return '<div class="linea"><span>'+esc(x[0])+'</span><b>'+esc(x[1])+'</b></div>'; }).join('')+
     (avisos||[]).filter(Boolean).map(function(a){ return '<div class="warn">⚠ '+esc(a)+'</div>'; }).join('')+
-    '<div class="btnrow"><button class="b2" id="mNo">✏️ Corregir</button><button class="b3" id="mSi">✔ Sí, registrar</button></div></div>';
+    '<div class="btnrow"><button class="b2" id="mNo">'+(op.no||'✏️ Corregir')+'</button><button class="'+(op.peligro?'bR':'b3')+'" id="mSi">'+(op.si||'✔ Sí, registrar')+'</button></div></div>';
   document.body.appendChild(d);
   $('mNo').onclick=function(){ d.parentNode.removeChild(d); };
   $('mSi').onclick=function(){ d.parentNode.removeChild(d); ok(); };
@@ -682,16 +707,16 @@ function preguntar(lineas, avisos, ok){
 function encolar(rec, resumen, tipo){
   if(S.papel && $('quien') && $('quien').value && $('quien').value!==S.nombre){ rec.capturo=S.nombre; rec.nombre=$('quien').value; resumen=rec.nombre+' · '+resumen; }
   if(S.firma) rec.firma=S.firma;
-  var c=cola(); c.push(rec); setCola(c);
+  var c=cola(); c.push(rec); setCola(c); histAgregar(rec,resumen);
   if(rec.tipo==='avance') avanzarLocal(rec.folio,rec.pieza,rec.fase);
   S.ultimo=tipo;
   pantalla('<div class="ok"><div class="icon">⏳</div><h2>Enviando…</h2><p class="sub">'+esc(resumen)+'</p></div>');
   if(!hayScript()){ confirmar(false,resumen); return; }
   google.script.run
-    .withSuccessHandler(function(){ setCola(cola().filter(function(r){return r.id!==rec.id;})); enLinea=true; pintarEstado(); confirmar(true,resumen); enviarPendientes(); })
+    .withSuccessHandler(function(){ setCola(cola().filter(function(r){return r.id!==rec.id;})); histMarcar(rec.id,'enviado'); enLinea=true; pintarEstado(); confirmar(true,resumen); enviarPendientes(); })
     .withFailureHandler(function(err){
       var msg=String(err&&err.message||err);
-      if(/cantidad|no válid|No encuentro/i.test(msg)){ setCola(cola().filter(function(r){return r.id!==rec.id;})); pantalla('<div class="card err">No se guardó: '+esc(msg)+'</div><button class="big b2" onclick="menu()">Volver</button>'); return; }
+      if(/cantidad|no válid|No encuentro/i.test(msg)){ setCola(cola().filter(function(r){return r.id!==rec.id;})); histMarcar(rec.id,'rechazado'); pantalla('<div class="card err">No se guardó: '+esc(msg)+'</div><button class="big b2" onclick="menu()">Volver</button>'); return; }
       enLinea=false; pintarEstado(); confirmar(false,resumen);
     })
     .registrar(rec);
@@ -706,8 +731,147 @@ function confirmar(enviado,resumen){
   else if(S.ultimo==='corte'){ h+='<button class="big b1" onclick="corte()">Corté otra pieza</button>'; }
   else if(S.ultimo==='empacado'){ h+='<button class="big b1" onclick="empacado()">Registrar otro empacado</button>'; }
   else if(S.ultimo==='almacen'){ h+='<button class="big b1" onclick="almacen()">Tomé otro material</button>'; }
+  else if(S.ultimo==='entrada'){ h+='<button class="big b1" onclick="entrada()">Registrar otra entrada</button>'; }
+  else if(S.ultimo==='problema'){ h+='<button class="big b1" onclick="problema()">Reportar otro problema</button>'; }
+  h+='<button class="big b2" onclick="misRegistros()">🧾 Ver mis registros de hoy</button>';
   h+='<button class="big b2" onclick="menu()">Inicio</button>';
   pantalla(h);
+}
+
+/* ---------- mis registros de hoy (con anular) ---------- */
+function minutosAnular(){ return (S.datos&&S.datos.minutosAnular)||15; }
+function misRegistros(){
+  var hoy=new Date(); hoy.setHours(0,0,0,0);
+  var h=hist().filter(function(x){ return x.t>=hoy.getTime() && (x.nombre===S.nombre || x.por===S.nombre); }).sort(function(a,b){ return b.t-a.t; });
+  var html='<button class="back" onclick="menu()">← Inicio</button><h2>🧾 Mis registros de hoy</h2><p class="sub">Si te equivocaste, puedes anular un registro durante los primeros '+minutosAnular()+' minutos. Después, pídeselo al encargado.</p>';
+  if(!h.length) html+='<div class="card">Hoy no has registrado nada en este celular.</div>';
+  h.forEach(function(x){
+    var hora=new Date(x.t).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+    var puede = x.estado==='pendiente' || (x.estado==='enviado' && (esAdmin() || Date.now()-x.t < minutosAnular()*60000));
+    var tag={pendiente:'<span class="tag t-Sin">sin enviar</span>',enviado:'<span class="tag t-Ter">enviado</span>',anulado:'<span class="tag t-Atr">anulado</span>',rechazado:'<span class="tag t-Atr">no se guardó</span>'}[x.estado]||'';
+    html+='<div class="card reg'+(x.estado==='anulado'?' tachado':'')+'"><div><b>'+esc(hora)+'</b> '+tag+'<br>'+esc(x.resumen)+'</div>'+
+          (puede?'<button class="bR chico" onclick="anularReg(\''+x.id+'\')">Anular</button>':'')+'</div>';
+  });
+  pantalla(html);
+}
+function anularReg(id, alTerminar){
+  var x=hist().filter(function(r){ return r.id===id; })[0]||{resumen:'Registro', id:id, estado:'enviado'};
+  preguntar([['Registro',x.resumen]], ['Se va a borrar de la hoja como si nunca se hubiera registrado.'], function(){
+    if(x.estado==='pendiente' && cola().some(function(r){ return r.id===id; })){
+      setCola(cola().filter(function(r){ return r.id!==id; })); histMarcar(id,'anulado'); cargarDatos(function(){}); (alTerminar||misRegistros)(); return;
+    }
+    if(!enLinea && !navigator.onLine){ alert('Necesitas internet para anular un registro que ya se envió.'); return; }
+    pantalla('<p>Anulando…</p>');
+    google.script.run
+      .withSuccessHandler(function(){ histMarcar(id,'anulado'); cargarDatos(function(){ (alTerminar||misRegistros)(); }); })
+      .withFailureHandler(function(err){ alert('No se pudo anular: '+String(err&&err.message||err).replace(/^SIN_RED:.*/,'no hay internet')); (alTerminar||misRegistros)(); })
+      .anular({ id:id, nombre:S.nombre, firma:S.firma });
+  }, { titulo:'¿Anular este registro?', sub:'Revisa que sea el correcto', si:'🗑 Sí, anular', no:'Cancelar', peligro:true });
+}
+
+/* ---------- reportar un problema (con foto) ---------- */
+var TIPOS_PROBLEMA=['Pieza dañada','Falta material','Máquina o herramienta','Otro'];
+function problema(){
+  S.foto=null; S.tipoProb=S.tipoProb||TIPOS_PROBLEMA[0];
+  var h='<button class="back" onclick="menu()">← Inicio</button><h2>⚠️ Reportar un problema</h2><p class="sub">Le llega un aviso al encargado</p><label>¿Qué pasó?</label><div class="seg">';
+  TIPOS_PROBLEMA.forEach(function(t){ h+='<button class="'+(S.tipoProb===t?'on':'')+'" onclick="S.tipoProb=\''+t+'\';[].forEach.call(document.querySelectorAll(\'#tp button\'),function(b){b.className=b.textContent===\''+t+'\'?\'on\':\'\';})">'+esc(t)+'</button>'; });
+  h=h.replace('<div class="seg">','<div class="seg" id="tp">');
+  h+='</div><label>¿En qué lote? (opcional)</label><select id="plote"><option value=""></option>';
+  (S.datos.lotes||[]).forEach(function(l){ h+='<option value="'+esc(l.folio)+'">'+esc(corto(l.folio))+'</option>'; });
+  h+='</select><label>Describe el problema</label><textarea id="pdesc" rows="3" maxlength="500" placeholder="Ej. 5 tapas salieron con el MDF despostillado"></textarea>'+
+     '<label>Foto (opcional)</label><label class="foto"><input type="file" accept="image/*" capture="environment" onchange="leerFoto(this)">📷 Tomar o elegir foto</label><div id="pfoto"></div>'+
+     '<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarProblema()">✔ Enviar reporte</button></div>';
+  pantalla(h);
+}
+/* Achica la foto para que no pese (máx. 1280 px) */
+function leerFoto(inp){
+  var f=inp.files&&inp.files[0]; if(!f) return;
+  var rd=new FileReader();
+  rd.onload=function(){
+    var img=new Image();
+    img.onload=function(){
+      var M=1280, w=img.width, h=img.height, k=Math.min(1,M/Math.max(w,h));
+      var c=document.createElement('canvas'); c.width=Math.round(w*k); c.height=Math.round(h*k);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      S.foto=c.toDataURL('image/jpeg',0.7);
+      $('pfoto').innerHTML='<img src="'+S.foto+'" style="max-width:100%;border-radius:12px;margin-top:8px"><button class="link" onclick="S.foto=null;$(\'pfoto\').innerHTML=\'\'">Quitar foto</button>';
+    };
+    img.src=rd.result;
+  };
+  rd.readAsDataURL(f);
+}
+function guardarProblema(){
+  var d=$('pdesc').value.trim(), lote=$('plote').value;
+  if(!d){ $('err').textContent='Escribe qué pasó.'; return; }
+  preguntar([['Tipo',S.tipoProb]].concat(lote?[['Lote',corto(lote)]]:[]).concat([['Descripción',d.length>60?d.slice(0,60)+'…':d],['Foto',S.foto?'Sí':'No']]), [], function(){
+    encolar({ id:uid(), tipo:'problema', nombre:S.nombre, ts:fechaRegistro(), tipoProblema:S.tipoProb, lote:lote, descripcion:d, foto:S.foto||'' }, 'Problema: '+S.tipoProb+' · '+d.slice(0,40), 'problema');
+  }, { sub:'Revisa el reporte', si:'✔ Sí, enviar' });
+}
+
+/* ---------- entrada de material al almacén (encargado) ---------- */
+function entrada(area){
+  if(!esAdmin()) return menu();
+  S.area=area||S.area||'Pintura';
+  var items=articulos().map(function(x,i){ return {val:i, titulo:x.nombre, sub:'Hay '+x.existencia+' '+x.unidad, extra:x.codigo, nivel:NIVEL[x.estado], queda:x.existencia+' '+x.unidad}; });
+  var h='<button class="back" onclick="menu()">← Inicio</button><h2>📥 Llegó material</h2><p class="sub">Entrada al almacén (compras)</p><div class="seg">';
+  ['Pintura','Ferretería'].forEach(function(a){ h+='<button class="'+(S.area===a?'on':'')+'" onclick="entrada(\''+a+'\')">'+(a==='Pintura'?'🎨 ':'🔩 ')+a+'</button>'; });
+  h+='</div><label>¿Qué material llegó?</label>'+buscador('art','Escribe: laca, lija, thinner…',items)+
+     '<label>¿Cuánto llegó?</label>'+stepper('cant',0)+
+     '<label>Proveedor / factura (opcional)</label><input type="text" id="prov" maxlength="120" placeholder="Ej. Comex F-1234">';
+  h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarEntrada()">✔ Registrar entrada</button></div>';
+  pantalla(h);
+}
+function guardarEntrada(){
+  var sel=elegido('art'), x=sel?articulos()[sel.val]:null, cant=parseFloat($('cant').value)||0, prov=$('prov').value.trim();
+  if(!x){ $('err').textContent='Elige el material que llegó.'; return; }
+  if(cant<=0){ $('err').textContent='Escribe cuánto llegó (más de 0).'; return; }
+  preguntar([['Material',x.nombre],['Llegó',cant+' '+x.unidad]].concat(prov?[['Proveedor / factura',prov]]:[]), [], function(){
+    x.existencia=Math.round((x.existencia+cant)*100)/100;
+    if(x.min!=null && x.alerta!=null) x.estado = x.existencia<=x.min ? 'CRÍTICO' : (x.existencia<=x.alerta ? 'POR AGOTARSE' : 'ESTABLE');
+    guardar('datos',S.datos);
+    encolar({ id:uid(), tipo:'entrada', nombre:S.nombre, ts:fechaRegistro(), area:S.area, articulo:x.op, codigo:x.codigo, nombreArt:x.nombre, cantidad:cant, proveedor:prov }, 'Entrada: '+x.nombre+' · '+cant+' '+x.unidad, 'entrada');
+  });
+}
+
+/* ---------- panel del encargado ---------- */
+function panelEncargado(){
+  if(!esAdmin()) return menu();
+  var h='<button class="back" onclick="menu()">← Inicio</button><h2>📊 Panel del encargado</h2>'+barrasAvance();
+  var atr=(S.datos.lotes||[]).filter(function(l){ return l.estado==='Atrasado'; });
+  h+='<div class="card"><b>⏰ Lotes atrasados ('+atr.length+')</b><br>'+(atr.length?atr.map(function(l){ return esc(corto(l.folio))+' <small>(semana '+esc(l.semana)+')</small>'; }).join('<br>'):'<span class="sub">Ninguno 👍</span>')+'</div>';
+  var cortar=Object.keys(S.datos.estante||{}).filter(function(k){ return S.datos.estante[k].estado==='CORTAR YA'; });
+  h+='<div class="card"><b>🔴 Piezas que hay que cortar ya ('+cortar.length+')</b><br>'+(cortar.length?cortar.slice(0,25).map(esc).join('<br>')+(cortar.length>25?'<br>…':''):'<span class="sub">Ninguna 👍</span>')+'</div>';
+  if(S.datos.almacen){
+    var rojo=[], amar=[];
+    Object.keys(S.datos.almacen).forEach(function(a){ S.datos.almacen[a].forEach(function(x){ if(x.estado==='CRÍTICO') rojo.push(x); else if(x.estado==='POR AGOTARSE') amar.push(x); }); });
+    h+='<div class="card"><b>🛒 Material para comprar</b><br>'+(rojo.length||amar.length?rojo.map(function(x){ return '🔴 '+esc(x.nombre)+' <small>(quedan '+x.existencia+' '+esc(x.unidad)+')</small>'; }).concat(amar.map(function(x){ return '🟡 '+esc(x.nombre)+' <small>(quedan '+x.existencia+' '+esc(x.unidad)+')</small>'; })).join('<br>'):'<span class="sub">Todo bien de existencia 👍</span>')+'</div>';
+  }
+  h+='<div id="panelSrv"><p class="sub">Cargando registros y problemas…</p></div>';
+  pantalla(h);
+  google.script.run
+    .withSuccessHandler(function(d){ if($('panelSrv')) $('panelSrv').innerHTML=panelSrvHtml(d); })
+    .withFailureHandler(function(err){ if($('panelSrv')) $('panelSrv').innerHTML='<div class="card">Sin internet: no se pueden ver los registros del día ni los problemas.<br><small>'+esc(String(err&&err.message||err).replace(/^SIN_RED:\s*/,''))+'</small></div>'; })
+    .panel({ nombre:S.nombre, firma:S.firma });
+}
+function panelSrvHtml(d){
+  var h='';
+  h+='<div class="card"><b>👥 Registros de hoy</b><br>'+(Object.keys(d.registrosHoy||{}).map(function(n){ return esc(n)+': '+d.registrosHoy[n]; }).join(' · ')||'<span class="sub">Nadie ha registrado hoy</span>')+
+     (d.sinRegistro&&d.sinRegistro.length?'<div class="warn" style="margin-top:8px">Sin registrar hoy: '+d.sinRegistro.map(esc).join(', ')+'</div>':'')+'</div>';
+  h+='<div class="card"><b>⚠️ Problemas sin resolver ('+(d.problemas||[]).length+')</b>';
+  (d.problemas||[]).forEach(function(p){
+    h+='<div class="prob"><small>'+esc(p.fecha)+' · '+esc(p.quien)+' · '+esc(p.tipo)+(p.lote?' · '+esc(corto(p.lote)):'')+'</small><br>'+esc(p.desc)+
+       (p.foto?'<br><a href="'+esc(p.foto)+'" target="_blank" rel="noopener">📷 Ver foto</a>':'')+
+       '<br><button class="link" onclick="resolverProb(\''+esc(p.id)+'\')">✔ Marcar resuelto</button></div>';
+  });
+  if(!(d.problemas||[]).length) h+='<br><span class="sub">Ninguno 👍</span>';
+  h+='</div><div class="card"><b>🧾 Últimos registros</b><p class="sub" style="margin:4px 0">Puedes anular cualquiera si está mal.</p>';
+  (d.ultimos||[]).forEach(function(r){
+    h+='<div class="reg"><div><small>'+esc(r.cuando)+' · '+esc(r.nombre)+'</small><br>'+esc(r.texto)+'</div><button class="bR chico" onclick="anularReg(\''+esc(r.id)+'\', panelEncargado)">Anular</button></div>';
+  });
+  return h+'</div>';
+}
+function resolverProb(id){
+  google.script.run.withSuccessHandler(function(){ panelEncargado(); }).withFailureHandler(function(e){ alert('No se pudo: '+String(e&&e.message||e)); }).resolver({ id:id, nombre:S.nombre, firma:S.firma });
 }
 
 /* ---------- arranque ---------- */
