@@ -58,6 +58,16 @@
   .puntos span.on{background:#1c4587}
   .teclado{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:320px;margin:10px auto}
   .teclado button{padding:18px 0;font-size:26px;font-weight:bold;background:#fff;border:1px solid #d1d5db}
+  .avance{margin-top:14px}
+  .av-tit{font-size:14px;color:#4b5563;margin-bottom:8px}
+  .av-fila{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:14px}
+  .av-fila.yo{font-weight:bold}
+  .av-nom{width:110px}
+  .av-barra{flex:1;height:14px;background:#eef0f3;border-radius:7px;overflow:hidden}
+  .av-barra i{display:block;height:100%;border-radius:7px}
+  .av-pct{width:40px;text-align:right}
+  .lote .mini{font-size:12px;margin-top:4px}
+  .lote .mini em{font-style:normal;margin-right:8px}
   .oc.pedido{font-size:14px;color:#1c4587;margin-top:16px}
   .oc.semana{background:#e6f1fb;color:#0c447c;padding:6px 10px;border-radius:8px;margin:8px 0 6px}
   .oc.semana span{font-weight:normal;color:#4b5563}
@@ -89,7 +99,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '1.5';
+var VERSION = '1.6';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -301,7 +311,7 @@ function quienHtml(){
 
 function menu(){
   var n=cola().length;
-  var h='<h2>Hola, '+esc(S.nombre)+'</h2>';
+  var h='<h2>Hola, '+esc(S.nombre)+(miArea()!=='Todas'?' <span class="tag t-En">'+miArea()+'</span>':'')+'</h2>';
   if(S.papel) h+='<div class="warn"><b>Modo hoja de papel:</b> vas a poder poner la fecha y hora en que se hizo cada registro'+(esAdmin()?' y quién lo hizo':'')+'. <button class="link" onclick="S.papel=false;menu()">Salir de este modo</button></div>';
   if(n) h+='<div class="warn">'+n+' registro(s) guardados en este celular, esperando internet. <button class="link" onclick="enviarPendientes()">Enviar ahora</button></div>';
   h+='<button class="big b1" onclick="lotes()">🔨<span>Avance de un lote<small>Terminé una fase</small></span></button>'+
@@ -312,17 +322,59 @@ function menu(){
      '<button class="link" onclick="salir()">No soy '+esc(S.nombre)+' (salir)</button>'+
      '<button class="link" onclick="S.papel=true;menu()">Pasar hoja de papel</button>'+
      '<button class="link" onclick="actualizar()">Actualizar datos</button></div>';
+  h+=barrasAvance();
   if(!esInstalada() && (promptInstalar || esIphone())) h+='<button class="big b4" onclick="instalar()">📲<span>Instalar la app en este celular<small>Para abrirla aunque no haya internet</small></span></button>';
   h+='<div class="ver">Versión '+VERSION+(S.datos&&S.datos.actualizado?' · datos del '+new Date(S.datos.actualizado).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'')+'</div>';
   pantalla(h);
 }
 function actualizar(){ pantalla('<p>Actualizando…</p>'); cargarDatos(inicio); }
 
+/* ---------- áreas (Corte / Lijado / Pintura) ---------- */
+var AREAS=['Corte','Lijado','Pintura'];
+var COLOR_AREA={Corte:'#38761d',Lijado:'#bf9000',Pintura:'#674ea7',Empacado:'#1c4587'};
+function miArea(){ var a=(S.datos.areaUsuarios||{})[S.nombre]; return (a && AREAS.indexOf(a)>=0) ? a : 'Todas'; }
+function numFase(f){ var n=parseInt(String(f||'').slice(0,2),10); return isNaN(n)?0:n; }
+function areaDeFase(pieza,fase){ var e=(S.datos.areasFases||[]).filter(function(x){ return x.pieza===pieza && x.fase===fase; })[0]; return e?e.area:null; }
+/* Avance de un lote en cada área (0 a 1), con la última fase registrada de cada pieza */
+function avanceLote(l){
+  var r={}; AREAS.forEach(function(a){ var tot=0, hec=0;
+    (S.datos.areasFases||[]).forEach(function(e){
+      if(e.area!==a) return;
+      if(e.pieza==='Empacado'){ tot++; hec+=l.cantidad?Math.min(1,(l.empacadas||0)/l.cantidad):0; return; }
+      if(e.techo && !l.techo) return;
+      tot++; if(e.n<=numFase(l.av[e.pieza])) hec++;
+    });
+    r[a]=tot?hec/tot:1; });
+  return r;
+}
+function avancePedido(oc){
+  var t=0, r={Corte:0,Lijado:0,Pintura:0,Empacado:0};
+  S.datos.lotes.forEach(function(l){ if(l.oc!==oc) return; var a=avanceLote(l); t+=l.cantidad;
+    AREAS.forEach(function(k){ r[k]+=a[k]*l.cantidad; }); r.Empacado+=Math.min(l.empacadas||0,l.cantidad); });
+  if(t) Object.keys(r).forEach(function(k){ r[k]/=t; });
+  r.urnas=t; return r;
+}
+function barrasAvance(){
+  if(!S.datos.areasFases) return '';
+  var h='', yo=miArea();
+  (S.datos.ocs||[]).forEach(function(oc){
+    var a=avancePedido(oc); if(!a.urnas) return;
+    h+='<div class="card avance"><div class="av-tit">Avance del pedido <b>'+esc(oc)+'</b> · '+a.urnas+' urnas</div>';
+    AREAS.concat(['Empacado']).forEach(function(k){
+      var p=Math.round(a[k]*100);
+      h+='<div class="av-fila'+(k===yo?' yo':'')+'"><span class="av-nom">'+k+(k===yo?' (tu área)':'')+'</span><span class="av-barra"><i style="width:'+p+'%;background:'+COLOR_AREA[k]+'"></i></span><span class="av-pct">'+p+'%</span></div>';
+    });
+    h+='</div>';
+  });
+  return h;
+}
+
 function lotes(filtro){
   filtro=(filtro||'').toLowerCase();
   var h='<button class="back" onclick="menu()">← Inicio</button>'+
         (S.datos.renglones?'<button class="big b3" onclick="empacado()">📦<span>Empacado<small>Registrar urnas empacadas para entrega</small></span></button>':'')+
         '<h2>¿Qué lote?</h2><p class="sub">Busca el nombre que dice la tarjeta</p>'+
+        (miArea()!=='Todas'?'<div class="seg"><button class="'+(S.verTodo?'':'on')+'" onclick="S.verTodo=false;lotes()">Pendientes de '+miArea()+'</button><button class="'+(S.verTodo?'on':'')+'" onclick="S.verTodo=true;lotes()">Todos</button></div>':'')+
         '<input type="text" id="busca" placeholder="Ej. Casita chocolate" value="'+esc(filtro)+'" oninput="filtrarLotes(this.value)">'+
         '<div id="listaLotes" style="margin-top:10px"></div>';
   pantalla(h); filtrarLotes(filtro);
@@ -332,6 +384,7 @@ function filtrarLotes(f){
   var grupos={}, orden=[], h='';
   S.datos.lotes.forEach(function(l,i){
     var t=norm(l.folio); if(f.length && !f.every(function(w){ return t.indexOf(w)>=0; })) return;
+    if(miArea()!=='Todas' && !S.verTodo && avanceLote(l)[miArea()]>=1) return;
     var k=l.oc+'|'+l.semana; if(!grupos[k]){ grupos[k]=[]; orden.push(k); } grupos[k].push(i);
   });
   orden.sort(function(a,b){ var A=a.split('|'),B=b.split('|'); return A[0]===B[0] ? (Number(A[1])||0)-(Number(B[1])||0) : (A[0]<B[0]?-1:1); });
@@ -344,11 +397,13 @@ function filtrarLotes(f){
     ids.forEach(function(i){
       var l=S.datos.lotes[i], av=[];
       PIEZAS.forEach(function(pz){ var v=l.av[pz[0]]; if(v && v!=='—' && v!=='No aplica') av.push(pz[1]+': '+v); });
+      var al=S.datos.areasFases?avanceLote(l):null;
       h+='<button class="lote" onclick="detalle('+i+')"><b>'+esc(corto(l.folio))+'</b>'+tagEstado(l.estado)+
-         '<span>'+l.cantidad+' piezas'+(l.empacadas?' · empacadas '+Math.min(l.empacadas,l.cantidad):'')+'</span><span>'+(av.length?esc(av.join(' · ')):'Sin avance registrado')+'</span></button>';
+         '<span>'+l.cantidad+' piezas'+(l.empacadas?' · empacadas '+Math.min(l.empacadas,l.cantidad):'')+'</span><span>'+(av.length?esc(av.join(' · ')):'Sin avance registrado')+'</span>'+
+         (al?'<span class="mini">'+AREAS.map(function(k){ return '<em style="color:'+COLOR_AREA[k]+'">'+k+' '+Math.round(al[k]*100)+'%</em>'; }).join(' ')+'</span>':'')+'</button>';
     });
   });
-  $('listaLotes').innerHTML = h || '<div class="card">No hay lotes con ese nombre. Revisa que el pedido esté <b>Activo</b> o toca "Actualizar datos".</div>';
+  $('listaLotes').innerHTML = h || (miArea()!=='Todas' && !S.verTodo ? '<div class="card">🎉 No hay lotes pendientes para <b>'+miArea()+'</b>. Toca <b>Todos</b> para ver el resto.</div>' : '<div class="card">No hay lotes con ese nombre. Revisa que el pedido esté <b>Activo</b> o toca "Actualizar datos".</div>');
 }
 
 /* ---------- empacado ---------- */
@@ -428,6 +483,7 @@ function fasesDe(l,pieza){
   var lista=S.datos.fases[pieza]||[];
   if(pieza==='Wakal' && !l.techo) lista=lista.filter(function(f){ return !/techo/i.test(f); });
   if(S.datos.faseEmpaque) lista=lista.filter(function(f){ return f!==S.datos.faseEmpaque; });
+  if(miArea()!=='Todas' && !S.verFases && S.datos.areasFases){ var a=miArea(); var sol=lista.filter(function(f){ var x=areaDeFase(pieza,f); return !x || x===a; }); if(sol.length) lista=sol; }
   return lista;
 }
 function sugerida(l,pieza){
@@ -439,12 +495,15 @@ function sugerida(l,pieza){
 
 function detalle(i,pieza){
   S.lote=S.datos.lotes[i]; var l=S.lote;
-  S.pieza=pieza||S.pieza||'Wakal';
-  if(S.pieza==='Techo' && !l.techo) S.pieza='Wakal';
+  var piezasOk=PIEZAS.filter(function(p){ if(p[0]==='Techo' && !l.techo) return false;
+    if(miArea()==='Todas' || S.verFases || !S.datos.areasFases) return true;
+    return (S.datos.fases[p[0]]||[]).some(function(f){ return areaDeFase(p[0],f)===miArea(); }); });
+  if(!piezasOk.length) piezasOk=PIEZAS.filter(function(p){ return !(p[0]==='Techo' && !l.techo); });
+  S.pieza=pieza||S.pieza||piezasOk[0][0];
+  if(!piezasOk.some(function(p){ return p[0]===S.pieza; })) S.pieza=piezasOk[0][0];
   var h='<button class="back" onclick="lotes()">← Lotes</button><h2>'+esc(corto(l.folio))+'</h2><p class="sub">'+l.cantidad+' piezas · pedido '+esc(l.oc)+'</p>';
   h+='<label>¿Qué pieza?</label><div class="seg">';
-  PIEZAS.forEach(function(p){
-    if(p[0]==='Techo' && !l.techo) return;
+  piezasOk.forEach(function(p){
     h+='<button class="'+(S.pieza===p[0]?'on':'')+'" onclick="detalle('+i+',\''+p[0]+'\')">'+p[1]+'</button>';
   });
   h+='</div>';
@@ -452,6 +511,7 @@ function detalle(i,pieza){
   h+='<label>Fase que terminaste</label><select id="fase">';
   lista.forEach(function(f){ h+='<option'+(f===sug?' selected':'')+'>'+esc(f)+'</option>'; });
   h+='</select><div class="sug">Va en: '+esc(act&&act!=='—'?act:'sin iniciar')+' → sugerida la siguiente</div>';
+  if(miArea()!=='Todas' && S.datos.areasFases) h+='<button class="link" onclick="S.verFases=!S.verFases;detalle('+i+')">'+(S.verFases?'Ver solo fases de '+miArea():'Ver todas las fases')+'</button>';
   h+='<label>¿Cuántas piezas pasaron?</label>'+stepper('cant',l.cantidad);
   h+='<label>¿Se dañó alguna?</label>'+stepper('dan',0);
   h+='<label>Comentario (opcional)</label><input type="text" id="com" maxlength="200">';
