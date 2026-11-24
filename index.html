@@ -53,6 +53,16 @@
   .warn{background:#fff7e0;border:1px solid #ffe599;color:#7f6000;padding:10px 12px;border-radius:12px;font-size:14px;margin-bottom:12px}
   .err{color:#b91c1c;font-size:14px;margin-top:8px}
   .link{background:none;color:#1c4587;text-decoration:underline;padding:8px 0;font-size:15px}
+  .opc{padding:12px 14px;margin-bottom:6px}
+  .opc.n-rojo,.elegido.n-rojo{border-left:6px solid #cc0000}
+  .opc.n-amarillo,.elegido.n-amarillo{border-left:6px solid #f1c232}
+  .opc.n-verde,.elegido.n-verde{border-left:6px solid #38761d}
+  .elegido{background:#fff;border:1px solid #d1d5db;border-radius:12px;padding:12px 14px}
+  .elegido span{display:block;font-size:13px;color:#6b7280;margin-top:3px}
+  .semaforo{margin-top:10px;padding:10px;border-radius:10px;font-weight:bold;font-size:16px}
+  .n-rojo .semaforo{background:#f4cccc;color:#990000}
+  .n-amarillo .semaforo{background:#fff2cc;color:#7f6000}
+  .n-verde .semaforo{background:#d9ead3;color:#274e13}
   .hide{display:none}
   .ver{font-size:11px;color:#9ca3af;text-align:center;margin-top:18px}
 </style>
@@ -68,7 +78,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '1.1';
+var VERSION = '1.2';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -303,32 +313,65 @@ function guardarAvance(){
   encolar(rec, corto(S.lote.folio)+' · '+rec.fase, 'avance');
 }
 
+/* ---------- buscador de material/piezas (busca escribiendo o abre la lista completa) ---------- */
+var NIVEL={ 'CRÍTICO':['rojo','🔴','Queda poco'], 'POR AGOTARSE':['amarillo','🟡','Ya casi se acaba'], 'ESTABLE':['verde','🟢','Hay suficiente'] };
+function norm(t){ return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+/* items: [{val, titulo, sub, estado}] */
+function buscador(id, placeholder, items){
+  S.pick=S.pick||{}; S.pick[id]={items:items, sel:null, todos:false};
+  return '<div id="'+id+'_buscar"><input type="text" id="'+id+'_q" placeholder="'+esc(placeholder)+'" oninput="pintarOpciones(\''+id+'\')" autocomplete="off">'+
+         '<div id="'+id+'_res" style="margin-top:8px"></div>'+
+         '<button class="link" id="'+id+'_todos" onclick="verTodos(\''+id+'\')">Ver toda la lista ▾</button></div>'+
+         '<div id="'+id+'_sel"></div>';
+}
+function opcionHtml(id,x,i){
+  var n=NIVEL[x.estado];
+  return '<button class="lote opc'+(n?' n-'+n[0]:'')+'" onclick="elegir(\''+id+'\','+i+')"><b>'+(n?n[1]+' ':'')+esc(x.titulo)+'</b>'+(x.sub?'<span>'+esc(x.sub)+'</span>':'')+'</button>';
+}
+function pintarOpciones(id){
+  var P=S.pick[id], q=norm($(id+'_q').value).split(/\s+/).filter(Boolean), h='', n=0;
+  if(q.length){
+    P.items.forEach(function(x,i){ var t=norm(x.titulo+' '+(x.sub||'')+' '+(x.extra||'')); if(q.every(function(w){return t.indexOf(w)>=0;})){ if(n<8) h+=opcionHtml(id,x,i); n++; } });
+    if(!n) h='<div class="card">No encontré nada con ese nombre. Toca <b>Ver toda la lista</b>.</div>';
+    else if(n>8) h+='<div class="sub">…y '+(n-8)+' más. Escribe más letras para ver menos.</div>';
+  } else if(P.todos){
+    P.items.forEach(function(x,i){ h+=opcionHtml(id,x,i); });
+  }
+  $(id+'_res').innerHTML=h;
+  $(id+'_todos').textContent = P.todos&&!q.length ? 'Ocultar lista ▴' : 'Ver toda la lista ▾';
+}
+function verTodos(id){ var P=S.pick[id]; P.todos=!P.todos; $(id+'_q').value=''; pintarOpciones(id); }
+function elegir(id,i){
+  var P=S.pick[id], x=P.items[i], n=NIVEL[x.estado]; P.sel=i;
+  $(id+'_buscar').className='hide';
+  $(id+'_sel').innerHTML='<div class="elegido'+(n?' n-'+n[0]:'')+'"><div><b>'+esc(x.titulo)+'</b>'+(x.sub&&!(n&&x.queda!=null)?'<span>'+esc(x.sub)+'</span>':'')+'</div>'+
+    (n?'<div class="semaforo">'+n[1]+' '+n[2]+(x.queda!=null?' · quedan '+esc(x.queda):'')+'</div>':'')+
+    '<button class="link" onclick="cambiar(\''+id+'\')">Cambiar</button></div>';
+  if($('err')) $('err').textContent='';
+}
+function cambiar(id){ S.pick[id].sel=null; $(id+'_sel').innerHTML=''; $(id+'_buscar').className=''; $(id+'_q').focus&&$(id+'_q').focus(); pintarOpciones(id); }
+function elegido(id){ var P=S.pick&&S.pick[id]; return P&&P.sel!=null ? P.items[P.sel] : null; }
+
 function estante(){
+  var items=(S.datos.piezasEstante||[]).map(function(t){ var p=t.split(' · '); return {val:t, titulo:p[0], sub:p.slice(1).join(' · ')}; });
   var h='<button class="back" onclick="menu()">← Inicio</button><h2>Tomé piezas del estante</h2>'+
-        '<label>¿Qué pieza?</label><input type="text" id="bp" placeholder="Busca: wakal, tapa, casita…" oninput="filtrarSelect(\'pz\',this.value,S.datos.piezasEstante)">'+
-        '<select id="pz" size="6" style="margin-top:8px"></select>'+
+        '<label>¿Qué pieza?</label>'+buscador('pz','Escribe: wakal, tapa, casita…',items)+
         '<label>¿Cuántas?</label>'+stepper('cant',0);
   if(S.papel) h+='<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
   h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarEstante()">✔ Registrar</button></div>';
-  pantalla(h); filtrarSelect('pz','',S.datos.piezasEstante);
-}
-function filtrarSelect(id,f,lista,val){
-  f=(f||'').toLowerCase(); var h='';
-  lista.forEach(function(x){ var t=typeof x==='string'?x:x.codigo+' · '+x.usado, v=typeof x==='string'?x:x.codigo;
-    if(!f || t.toLowerCase().indexOf(f)>=0) h+='<option value="'+esc(v)+'">'+esc(t)+'</option>'; });
-  $(id).innerHTML=h;
+  pantalla(h);
 }
 function guardarEstante(){
-  var pz=$('pz').value, cant=parseInt($('cant').value,10)||0;
-  if(!pz){ $('err').textContent='Elige la pieza que tomaste.'; return; }
+  var x=elegido('pz'), cant=parseInt($('cant').value,10)||0;
+  if(!x){ $('err').textContent='Elige la pieza que tomaste.'; return; }
   if(cant<=0){ $('err').textContent='Escribe cuántas tomaste (más de 0).'; return; }
-  encolar({ id:uid(), tipo:'estante', nombre:S.nombre, ts:fechaRegistro(), piezaEstante:pz, cantidad:cant }, pz+' · '+cant+' piezas', 'estante');
+  encolar({ id:uid(), tipo:'estante', nombre:S.nombre, ts:fechaRegistro(), piezaEstante:x.val, cantidad:cant }, x.val+' · '+cant+' piezas', 'estante');
 }
 
 function corte(){
+  var items=(S.datos.piezasCorte||[]).map(function(x){ return {val:x.codigo, titulo:x.codigo, sub:x.usado}; });
   var h='<button class="back" onclick="menu()">← Inicio</button><h2>Corté piezas</h2><p class="sub">Piezas nuevas que dejaste en el estante</p>'+
-        '<label>¿Qué pieza?</label><input type="text" placeholder="Busca: wakal, tapa, casita…" oninput="filtrarSelect(\'pc\',this.value,S.datos.piezasCorte)">'+
-        '<select id="pc" size="6" style="margin-top:8px"></select>'+
+        '<label>¿Qué pieza?</label>'+buscador('pc','Escribe: wakal, tapa, casita…',items)+
         '<label>¿Cuántas piezas?</label>'+stepper('cant',0)+
         '<label>Hojas de MDF que usaste (opcional)</label>'+stepper('hojas',0)+
         '<label>¿Para qué pedido? (opcional)</label><select id="oc"><option value=""></option>';
@@ -336,43 +379,38 @@ function corte(){
   h+='</select>';
   if(S.papel) h+='<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
   h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarCorte()">✔ Registrar</button></div>';
-  pantalla(h); filtrarSelect('pc','',S.datos.piezasCorte);
+  pantalla(h);
 }
 function guardarCorte(){
-  var pc=$('pc').value, cant=parseInt($('cant').value,10)||0, hojas=parseInt($('hojas').value,10)||0;
-  if(!pc){ $('err').textContent='Elige la pieza que cortaste.'; return; }
+  var x=elegido('pc'), cant=parseInt($('cant').value,10)||0, hojas=parseInt($('hojas').value,10)||0;
+  if(!x){ $('err').textContent='Elige la pieza que cortaste.'; return; }
   if(cant<=0){ $('err').textContent='Escribe cuántas piezas cortaste (más de 0).'; return; }
-  encolar({ id:uid(), tipo:'corte', nombre:S.nombre, ts:fechaRegistro(), piezaCorte:pc, cantidad:cant, hojas:hojas||'', oc:$('oc').value }, pc+' · '+cant+' piezas', 'corte');
+  encolar({ id:uid(), tipo:'corte', nombre:S.nombre, ts:fechaRegistro(), piezaCorte:x.val, cantidad:cant, hojas:hojas||'', oc:$('oc').value }, x.val+' · '+cant+' piezas', 'corte');
 }
 
 /* ---------- almacén (pintura y ferretería) ---------- */
+function articulos(){ return (S.datos.almacen&&S.datos.almacen[S.area])||[]; }
 function almacen(area){
   S.area=area||S.area||'Pintura';
+  var items=articulos().map(function(x,i){ return {val:i, titulo:x.nombre, sub:'Quedan '+x.existencia+' '+x.unidad, extra:x.codigo, estado:x.estado, queda:x.existencia+' '+x.unidad}; });
   var h='<button class="back" onclick="menu()">← Inicio</button><h2>Tomé material del almacén</h2><div class="seg">';
   ['Pintura','Ferretería'].forEach(function(a){ h+='<button class="'+(S.area===a?'on':'')+'" onclick="almacen(\''+a+'\')">'+(a==='Pintura'?'🎨 ':'🔩 ')+a+'</button>'; });
-  h+='</div><label>¿Qué material?</label><input type="text" placeholder="Busca: laca, lija, thinner…" oninput="filtrarAlmacen(this.value)">'+
-     '<select id="art" size="7" style="margin-top:8px" onchange="infoArt()"></select><div id="infoArt" class="sug"></div>'+
+  h+='</div><label>¿Qué material?</label>'+buscador('art','Escribe: laca, lija, thinner…',items)+
+     '<div class="sub" style="margin-top:6px">🟢 hay suficiente · 🟡 ya casi se acaba · 🔴 queda poco</div>'+
      '<label>¿Cuánto tomaste?</label>'+stepper('cant',1)+
      '<label>¿Para qué? (opcional)</label><input type="text" id="uso" maxlength="120" placeholder="Ej. pedido OC1655, casitas chocolate">';
   if(S.papel) h+='<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
   h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarAlmacen()">✔ Registrar</button></div>';
-  pantalla(h); filtrarAlmacen('');
+  pantalla(h);
 }
-function articulos(){ return (S.datos.almacen&&S.datos.almacen[S.area])||[]; }
-function filtrarAlmacen(f){
-  f=(f||'').toLowerCase(); var h='';
-  articulos().forEach(function(x,i){ if(f && x.op.toLowerCase().indexOf(f)<0) return;
-    var marca=x.estado==='CRÍTICO'?'🔴 ':(x.estado==='POR AGOTARSE'?'🟡 ':'');
-    h+='<option value="'+i+'">'+esc(marca+x.nombre+' · quedan '+x.existencia+' '+x.unidad)+'</option>'; });
-  $('art').innerHTML=h||'<option disabled>No hay artículos con ese nombre</option>'; infoArt();
-}
-function infoArt(){ var x=articulos()[$('art').value]; $('infoArt').textContent = x ? (x.codigo+' · unidad: '+x.unidad) : ''; }
 function guardarAlmacen(){
-  var x=articulos()[$('art').value], cant=parseFloat($('cant').value)||0;
+  var sel=elegido('art'), x=sel?articulos()[sel.val]:null, cant=parseFloat($('cant').value)||0;
   if(!x){ $('err').textContent='Elige el material que tomaste.'; return; }
   if(cant<=0){ $('err').textContent='Escribe cuánto tomaste (más de 0).'; return; }
   if(cant>x.existencia && x.existencia>0 && !confirm('En el sistema solo quedan '+x.existencia+' '+x.unidad+'. ¿Seguro que tomaste '+cant+'?')) return;
-  x.existencia=Math.round((x.existencia-cant)*100)/100; guardar('datos',S.datos);
+  x.existencia=Math.round((x.existencia-cant)*100)/100;
+  if(x.min!=null && x.alerta!=null) x.estado = x.existencia<=x.min ? 'CRÍTICO' : (x.existencia<=x.alerta ? 'POR AGOTARSE' : 'ESTABLE');
+  guardar('datos',S.datos);
   encolar({ id:uid(), tipo:'almacen', nombre:S.nombre, ts:fechaRegistro(), area:S.area, articulo:x.op, cantidad:cant, uso:$('uso').value.trim() },
           x.nombre+' · '+cant+' '+x.unidad, 'almacen');
 }
