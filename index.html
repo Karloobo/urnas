@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Producción de urnas</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1c4587">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Urnas">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f3f4f6;color:#1f2937;font-size:17px}
+  header{position:sticky;top:0;padding-top:max(10px,env(safe-area-inset-top));z-index:5;background:#1c4587;color:#fff;padding:10px 14px;display:flex;align-items:center;gap:8px}
+  header h1{font-size:17px;margin:0;flex:1}
+  .pill{font-size:12px;padding:4px 9px;border-radius:999px;background:#d9ead3;color:#274e13;white-space:nowrap}
+  .pill.off{background:#f4cccc;color:#990000}
+  .pill.pend{background:#ffe599;color:#7f6000}
+  main{padding:14px;max-width:560px;margin:0 auto}
+  h2{font-size:19px;margin:6px 0 12px}
+  .sub{color:#6b7280;font-size:14px;margin:-6px 0 12px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  button{font:inherit;border:0;border-radius:12px;cursor:pointer}
+  .big{width:100%;padding:18px 12px;font-size:18px;font-weight:bold;margin-bottom:10px;display:flex;align-items:center;gap:12px;text-align:left}
+  .big small{display:block;font-weight:normal;font-size:13px;opacity:.8}
+  .b1{background:#1c4587;color:#fff}.b2{background:#fff;color:#1f2937;border:1px solid #d1d5db}
+  .b3{background:#274e13;color:#fff}.b4{background:#7f6000;color:#fff}
+  .name{background:#e6f1fb;color:#0c447c;padding:20px 6px;font-size:17px;font-weight:bold}
+  .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin-bottom:10px}
+  .lote{width:100%;text-align:left;background:#fff;border:1px solid #e5e7eb;padding:12px 14px;margin-bottom:8px}
+  .lote b{font-size:16px}.lote span{display:block;font-size:13px;color:#6b7280;margin-top:3px}
+  .tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:middle}
+  .t-Sin{background:#efefef;color:#555}.t-En{background:#cfe2f3;color:#1c4587}.t-Ter{background:#d9ead3;color:#274e13}.t-Atr{background:#f4cccc;color:#990000}
+  .oc{font-size:13px;color:#6b7280;margin:14px 0 6px;font-weight:bold;letter-spacing:.3px}
+  .seg{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  .seg button{flex:1;min-width:70px;padding:14px 6px;background:#fff;border:1px solid #d1d5db;font-weight:bold}
+  .seg button.on{background:#1c4587;color:#fff;border-color:#1c4587}
+  label{display:block;font-size:14px;color:#4b5563;margin:12px 0 6px}
+  select,input[type=text],input[type=number],input[type=datetime-local]{width:100%;font:inherit;padding:14px;border:1px solid #d1d5db;border-radius:12px;background:#fff}
+  .sug{font-size:12px;color:#274e13;margin-top:4px}
+  .step{display:flex;align-items:center;gap:10px}
+  .step button{width:58px;height:58px;font-size:28px;background:#fff;border:1px solid #d1d5db}
+  .step input{text-align:center;font-size:24px;font-weight:bold}
+  .btnrow{display:flex;gap:10px;margin-top:18px}
+  .btnrow button{flex:1;padding:16px;font-weight:bold}
+  .back{background:none;color:#1c4587;padding:6px 0;margin-bottom:6px;font-size:15px}
+  .ok{text-align:center;padding:30px 10px}
+  .ok .icon{font-size:64px;line-height:1}
+  .warn{background:#fff7e0;border:1px solid #ffe599;color:#7f6000;padding:10px 12px;border-radius:12px;font-size:14px;margin-bottom:12px}
+  .err{color:#b91c1c;font-size:14px;margin-top:8px}
+  .link{background:none;color:#1c4587;text-decoration:underline;padding:8px 0;font-size:15px}
+  .hide{display:none}
+  .ver{font-size:11px;color:#9ca3af;text-align:center;margin-top:18px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Producción de urnas</h1>
+  <span id="estado" class="pill">Conectando…</span>
+</header>
+<main id="app"><p>Cargando…</p></main>
+
+<script>
+/* ====== Conexión con tu hoja de Google (Apps Script) ======
+   Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
+var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
+var VERSION = '1.0';
+
+function llamarApi(accion, rec){
+  var ctrl = ('AbortController' in window) ? new AbortController() : null;
+  var t = setTimeout(function(){ if(ctrl) ctrl.abort(); }, 20000);
+  var p = accion==='datos'
+    ? fetch(API_URL+'?accion=datos&t='+Date.now(), {signal: ctrl&&ctrl.signal})
+    : fetch(API_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+                      body: JSON.stringify({accion:accion, rec:rec}), signal: ctrl&&ctrl.signal});
+  return p.then(function(r){ return r.text(); })
+    .then(function(txt){
+      clearTimeout(t);
+      var j; try{ j=JSON.parse(txt); }catch(e){ throw new Error('SIN_RED: respuesta no válida (revisa que Apps Script tenga acceso "Cualquier usuario")'); }
+      if(!j.ok) throw new Error(j.error||'Error desconocido');
+      return accion==='datos' ? j.datos : j;
+    }, function(err){ clearTimeout(t); throw new Error('SIN_RED: '+(err&&err.message||err)); });
+}
+/* Imita google.script.run para que el resto de la app no cambie */
+function Runner(){ this.ok=null; this.fail=null; }
+Runner.prototype.withSuccessHandler=function(f){ this.ok=f; return this; };
+Runner.prototype.withFailureHandler=function(f){ this.fail=f; return this; };
+Runner.prototype._go=function(accion,rec){ var me=this;
+  llamarApi(accion,rec).then(function(r){ me.ok&&me.ok(r); }, function(e){ me.fail&&me.fail(e); }); };
+Runner.prototype.getData=function(){ this._go('datos'); };
+Runner.prototype.registrar=function(rec){ this._go('registrar',rec); };
+var google={script:{}};
+Object.defineProperty(google.script,'run',{get:function(){ return new Runner(); }});
+
+/* Funciona sin internet: guarda la app en el celular */
+if('serviceWorker' in navigator){ window.addEventListener('load',function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); }); }
+if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(function(){}); }
+
+/* Botón "Instalar app" */
+var promptInstalar=null;
+window.addEventListener('beforeinstallprompt',function(e){ e.preventDefault(); promptInstalar=e; if(typeof S!=='undefined' && S.nombre && $('app').querySelector('.big')) menu(); });
+function esInstalada(){ return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone; }
+function esIphone(){ return /iphone|ipad|ipod/i.test(navigator.userAgent); }
+function instalar(){
+  if(promptInstalar){ promptInstalar.prompt(); promptInstalar.userChoice.then(function(){ promptInstalar=null; menu(); }); return; }
+  alert(esIphone() ? 'En Safari toca el botón Compartir (cuadro con flecha) y luego "Agregar a inicio".'
+                   : 'Toca los 3 puntos ⋮ del navegador y luego "Instalar app" o "Agregar a pantalla principal".');
+}
+</script>
+<script>
+var S = { datos:null, nombre:null, lote:null, pieza:null, papel:false, ultimo:null };
+var PIEZAS = [['Wakal','Huacal'],['Tapa','Tapa'],['Centro','Centro'],['Techo','Techo']];
+
+/* ---------- almacenamiento en el celular ---------- */
+var MEM = {};
+function guardar(k,v){ try{ localStorage.setItem('urnas_'+k, JSON.stringify(v)); }catch(e){ MEM[k]=v; } }
+function leer(k,def){ try{ var v=localStorage.getItem('urnas_'+k); return v?JSON.parse(v):def; }catch(e){ return MEM[k]!==undefined?MEM[k]:def; } }
+function cola(){ return leer('cola',[]); }
+function setCola(c){ guardar('cola',c); pintarEstado(); }
+
+/* ---------- utilidades ---------- */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function uid(){ return Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9); }
+function $(id){ return document.getElementById(id); }
+function pantalla(html){ $('app').innerHTML=html; window.scrollTo(0,0); }
+function corto(f){ return String(f).replace(/\s*\([^)]*\)\s*$/,''); }
+function tagEstado(e){ var k=String(e||'').slice(0,3); return '<span class="tag t-'+esc(k)+'">'+esc(e||'')+'</span>'; }
+function ahoraLocal(){ var d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,16); }
+
+/* ---------- conexión ---------- */
+var enLinea = navigator.onLine;
+function pintarEstado(){
+  var n=cola().length, el=$('estado');
+  if(!enLinea){ el.className='pill off'; el.textContent='Sin internet'+(n?' · '+n+' pendientes':''); }
+  else if(n){ el.className='pill pend'; el.textContent=n+' por enviar…'; }
+  else { el.className='pill'; el.textContent='En línea'; }
+}
+function hayScript(){ return typeof google!=='undefined' && google.script && google.script.run; }
+
+function cargarDatos(cb){
+  var cache=leer('datos',null);
+  if(cache && !S.datos){ S.datos=cache; }
+  if(!hayScript()){ enLinea=false; pintarEstado(); cb&&cb(); return; }
+  google.script.run
+    .withSuccessHandler(function(d){ S.datos=d; guardar('datos',d); enLinea=true; aplicarPendientesALotes(); pintarEstado(); cb&&cb(); })
+    .withFailureHandler(function(err){
+      enLinea=false; pintarEstado();
+      if(!S.datos){ var m=String(err&&err.message||err); document.getElementById('app').innerHTML='<div class="card">'+(/SIN_RED/.test(m)&&!navigator.onLine?'<b>Abre la app una vez con internet</b> para que se descarguen los lotes. Después ya funciona sin señal.<br><br>Mientras tanto usa la <b>hoja de registro en papel</b>.':'<b style="color:#b00020">No pude leer la hoja.</b><br><br>'+esc(m)+'<br><br><small>Mándale una foto de esto a Karlo.</small>')+'<br><br><button class="big b1" onclick="actualizar()">Reintentar</button></div>'; return; }
+      cb&&cb();
+    })
+    .getData();
+}
+
+var enviando=false;
+function enviarPendientes(){
+  if(enviando || !hayScript()) return;
+  var c=cola(); if(!c.length){ pintarEstado(); return; }
+  enviando=true;
+  var rec=c[0];
+  google.script.run
+    .withSuccessHandler(function(){ var c2=cola().filter(function(r){return r.id!==rec.id;}); setCola(c2); enLinea=true; enviando=false; enviarPendientes(); })
+    .withFailureHandler(function(err){
+      enviando=false;
+      var msg=String(err&&err.message||err);
+      if(/cantidad|no válido|No encuentro/i.test(msg)){ /* error de datos: se descarta para no trabar la cola */
+        var c3=cola().filter(function(r){return r.id!==rec.id;}); setCola(c3);
+        alert('Un registro no se pudo guardar: '+msg);
+      } else { enLinea=false; pintarEstado(); }
+    })
+    .registrar(rec);
+}
+setInterval(function(){ if(cola().length) enviarPendientes(); }, 30000);
+window.addEventListener('online',function(){ enLinea=true; pintarEstado(); enviarPendientes(); cargarDatos(); });
+window.addEventListener('offline',function(){ enLinea=false; pintarEstado(); });
+
+/* Mientras no se envían, los registros pendientes adelantan el avance que se muestra */
+function aplicarPendientesALotes(){
+  if(!S.datos) return;
+  cola().forEach(function(r){ if(r.tipo==='avance') avanzarLocal(r.folio,r.pieza,r.fase); });
+}
+function avanzarLocal(folio,pieza,fase){
+  var l=(S.datos.lotes||[]).filter(function(x){return x.folio===folio;})[0];
+  if(!l) return;
+  var lista=S.datos.fases[pieza]||[];
+  if(lista.indexOf(fase) > lista.indexOf(l.av[pieza])) l.av[pieza]=fase;
+  if(l.estado==='Sin iniciar') l.estado='En proceso';
+}
+
+/* ---------- pantallas ---------- */
+function inicio(){
+  S.nombre=leer('nombre',null);
+  if(!S.datos){ pantalla('<div class="card">No se pudieron cargar los datos. Revisa tu internet y vuelve a abrir la app.<br><br>Mientras tanto usa la <b>hoja de registro en papel</b>.</div>'); return; }
+  if(!S.nombre || S.datos.nombres.indexOf(S.nombre)<0) return elegirNombre();
+  menu();
+}
+
+function elegirNombre(){
+  var h='<h2>¿Quién eres?</h2><p class="sub">Toca tu nombre</p><div class="grid2">';
+  S.datos.nombres.forEach(function(n,i){ h+='<button class="name" onclick="setNombre('+i+')">'+esc(n)+'</button>'; });
+  pantalla(h+'</div>');
+}
+function setNombre(i){ S.nombre=S.datos.nombres[i]; guardar('nombre',S.nombre); menu(); }
+
+function menu(){
+  var n=cola().length;
+  var h='<h2>Hola, '+esc(S.nombre)+'</h2>';
+  if(S.papel) h+='<div class="warn"><b>Modo hoja de papel:</b> vas a poder poner la fecha y hora en que se hizo cada registro. <button class="link" onclick="S.papel=false;menu()">Salir de este modo</button></div>';
+  if(n) h+='<div class="warn">'+n+' registro(s) guardados en este celular, esperando internet. <button class="link" onclick="enviarPendientes()">Enviar ahora</button></div>';
+  h+='<button class="big b1" onclick="lotes()">🔨<span>Avance de un lote<small>Terminé una fase</small></span></button>'+
+     '<button class="big b2" onclick="estante()">📦<span>Tomé piezas del estante<small>Saqué piezas para trabajar</small></span></button>'+
+     '<button class="big b2" onclick="corte()">🪚<span>Corté piezas<small>Dejé piezas nuevas en el estante</small></span></button>'+
+     '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-top:8px">'+
+     '<button class="link" onclick="elegirNombre()">No soy '+esc(S.nombre)+'</button>'+
+     '<button class="link" onclick="S.papel=true;menu()">Pasar hoja de papel</button>'+
+     '<button class="link" onclick="actualizar()">Actualizar datos</button></div>';
+  if(!esInstalada() && (promptInstalar || esIphone())) h+='<button class="big b4" onclick="instalar()">📲<span>Instalar la app en este celular<small>Para abrirla aunque no haya internet</small></span></button>';
+  h+='<div class="ver">Versión '+VERSION+(S.datos&&S.datos.actualizado?' · datos del '+new Date(S.datos.actualizado).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'')+'</div>';
+  pantalla(h);
+}
+function actualizar(){ pantalla('<p>Actualizando…</p>'); cargarDatos(inicio); }
+
+function lotes(filtro){
+  filtro=(filtro||'').toLowerCase();
+  var h='<button class="back" onclick="menu()">← Inicio</button><h2>¿Qué lote?</h2><p class="sub">Busca el nombre que dice la tarjeta</p>'+
+        '<input type="text" id="busca" placeholder="Ej. Casita chocolate" value="'+esc(filtro)+'" oninput="filtrarLotes(this.value)">'+
+        '<div id="listaLotes" style="margin-top:10px"></div>';
+  pantalla(h); filtrarLotes(filtro);
+}
+function filtrarLotes(f){
+  f=(f||'').toLowerCase();
+  var porOc={}, h='';
+  S.datos.lotes.forEach(function(l,i){
+    if(f && l.folio.toLowerCase().indexOf(f)<0) return;
+    (porOc[l.oc]=porOc[l.oc]||[]).push(i);
+  });
+  Object.keys(porOc).forEach(function(oc){
+    h+='<div class="oc">PEDIDO '+esc(oc)+'</div>';
+    porOc[oc].forEach(function(i){
+      var l=S.datos.lotes[i], av=[];
+      PIEZAS.forEach(function(p){ var v=l.av[p[0]]; if(v && v!=='—' && v!=='No aplica') av.push(p[1]+': '+v); });
+      h+='<button class="lote" onclick="detalle('+i+')"><b>'+esc(corto(l.folio))+'</b>'+tagEstado(l.estado)+
+         '<span>'+l.cantidad+' piezas · semana '+esc(l.semana)+'</span><span>'+(av.length?esc(av.join(' · ')):'Sin avance registrado')+'</span></button>';
+    });
+  });
+  $('listaLotes').innerHTML = h || '<div class="card">No hay lotes con ese nombre. Revisa que el pedido esté <b>Activo</b> o toca "Actualizar datos".</div>';
+}
+
+/* Fases que aplican a este lote (sin las de techo si el modelo no lleva techo) */
+function fasesDe(l,pieza){
+  var lista=S.datos.fases[pieza]||[];
+  if(pieza==='Wakal' && !l.techo) lista=lista.filter(function(f){ return !/techo/i.test(f); });
+  return lista;
+}
+function sugerida(l,pieza){
+  var todas=S.datos.fases[pieza]||[], lista=fasesDe(l,pieza), act=todas.indexOf(l.av[pieza]);
+  if(act<0) return lista[0];
+  for(var k=0;k<lista.length;k++){ if(todas.indexOf(lista[k])>act) return lista[k]; }
+  return lista[lista.length-1];
+}
+
+function detalle(i,pieza){
+  S.lote=S.datos.lotes[i]; var l=S.lote;
+  S.pieza=pieza||S.pieza||'Wakal';
+  if(S.pieza==='Techo' && !l.techo) S.pieza='Wakal';
+  var h='<button class="back" onclick="lotes()">← Lotes</button><h2>'+esc(corto(l.folio))+'</h2><p class="sub">'+l.cantidad+' piezas · pedido '+esc(l.oc)+'</p>';
+  h+='<label>¿Qué pieza?</label><div class="seg">';
+  PIEZAS.forEach(function(p){
+    if(p[0]==='Techo' && !l.techo) return;
+    h+='<button class="'+(S.pieza===p[0]?'on':'')+'" onclick="detalle('+i+',\''+p[0]+'\')">'+p[1]+'</button>';
+  });
+  h+='</div>';
+  var lista=fasesDe(l,S.pieza), sug=sugerida(l,S.pieza), act=l.av[S.pieza];
+  h+='<label>Fase que terminaste</label><select id="fase">';
+  lista.forEach(function(f){ h+='<option'+(f===sug?' selected':'')+'>'+esc(f)+'</option>'; });
+  h+='</select><div class="sug">Va en: '+esc(act&&act!=='—'?act:'sin iniciar')+' → sugerida la siguiente</div>';
+  h+='<label>¿Cuántas piezas pasaron?</label>'+stepper('cant',l.cantidad);
+  h+='<label>¿Se dañó alguna?</label>'+stepper('dan',0);
+  h+='<label>Comentario (opcional)</label><input type="text" id="com" maxlength="200">';
+  if(S.papel) h+='<label>Fecha y hora en que se hizo (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
+  h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarAvance()">✔ Registrar</button></div>';
+  pantalla(h);
+}
+function stepper(id,v){
+  return '<div class="step"><button onclick="paso(\''+id+'\',-1)">−</button><input type="number" inputmode="numeric" id="'+id+'" value="'+v+'" min="0"><button onclick="paso(\''+id+'\',1)">+</button></div>';
+}
+function paso(id,d){ var e=$(id); e.value=Math.max(0,(parseInt(e.value,10)||0)+d); }
+function fechaRegistro(){
+  if(S.papel && $('fh') && $('fh').value) return new Date($('fh').value).toISOString();
+  return new Date().toISOString();
+}
+
+function guardarAvance(){
+  var cant=parseInt($('cant').value,10)||0, dan=parseInt($('dan').value,10)||0;
+  if(cant<=0){ $('err').textContent='Escribe cuántas piezas pasaron (más de 0).'; return; }
+  if(cant>S.lote.cantidad*2){ if(!confirm('¿Seguro? Pusiste '+cant+' y el lote es de '+S.lote.cantidad+'.')) return; }
+  var rec={ id:uid(), tipo:'avance', nombre:S.nombre, ts:fechaRegistro(), folio:S.lote.folio, pieza:S.pieza,
+            fase:$('fase').value, cantidad:cant, danadas:dan, comentario:$('com').value.trim() };
+  encolar(rec, corto(S.lote.folio)+' · '+rec.fase, 'avance');
+}
+
+function estante(){
+  var h='<button class="back" onclick="menu()">← Inicio</button><h2>Tomé piezas del estante</h2>'+
+        '<label>¿Qué pieza?</label><input type="text" id="bp" placeholder="Busca: wakal, tapa, casita…" oninput="filtrarSelect(\'pz\',this.value,S.datos.piezasEstante)">'+
+        '<select id="pz" size="6" style="margin-top:8px"></select>'+
+        '<label>¿Cuántas?</label>'+stepper('cant',0);
+  if(S.papel) h+='<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
+  h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarEstante()">✔ Registrar</button></div>';
+  pantalla(h); filtrarSelect('pz','',S.datos.piezasEstante);
+}
+function filtrarSelect(id,f,lista,val){
+  f=(f||'').toLowerCase(); var h='';
+  lista.forEach(function(x){ var t=typeof x==='string'?x:x.codigo+' · '+x.usado, v=typeof x==='string'?x:x.codigo;
+    if(!f || t.toLowerCase().indexOf(f)>=0) h+='<option value="'+esc(v)+'">'+esc(t)+'</option>'; });
+  $(id).innerHTML=h;
+}
+function guardarEstante(){
+  var pz=$('pz').value, cant=parseInt($('cant').value,10)||0;
+  if(!pz){ $('err').textContent='Elige la pieza que tomaste.'; return; }
+  if(cant<=0){ $('err').textContent='Escribe cuántas tomaste (más de 0).'; return; }
+  encolar({ id:uid(), tipo:'estante', nombre:S.nombre, ts:fechaRegistro(), piezaEstante:pz, cantidad:cant }, pz+' · '+cant+' piezas', 'estante');
+}
+
+function corte(){
+  var h='<button class="back" onclick="menu()">← Inicio</button><h2>Corté piezas</h2><p class="sub">Piezas nuevas que dejaste en el estante</p>'+
+        '<label>¿Qué pieza?</label><input type="text" placeholder="Busca: wakal, tapa, casita…" oninput="filtrarSelect(\'pc\',this.value,S.datos.piezasCorte)">'+
+        '<select id="pc" size="6" style="margin-top:8px"></select>'+
+        '<label>¿Cuántas piezas?</label>'+stepper('cant',0)+
+        '<label>Hojas de MDF que usaste (opcional)</label>'+stepper('hojas',0)+
+        '<label>¿Para qué pedido? (opcional)</label><select id="oc"><option value=""></option>';
+  (S.datos.ocs||[]).forEach(function(o){ h+='<option>'+esc(o)+'</option>'; });
+  h+='</select>';
+  if(S.papel) h+='<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
+  h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarCorte()">✔ Registrar</button></div>';
+  pantalla(h); filtrarSelect('pc','',S.datos.piezasCorte);
+}
+function guardarCorte(){
+  var pc=$('pc').value, cant=parseInt($('cant').value,10)||0, hojas=parseInt($('hojas').value,10)||0;
+  if(!pc){ $('err').textContent='Elige la pieza que cortaste.'; return; }
+  if(cant<=0){ $('err').textContent='Escribe cuántas piezas cortaste (más de 0).'; return; }
+  encolar({ id:uid(), tipo:'corte', nombre:S.nombre, ts:fechaRegistro(), piezaCorte:pc, cantidad:cant, hojas:hojas||'', oc:$('oc').value }, pc+' · '+cant+' piezas', 'corte');
+}
+
+/* Todo registro pasa primero por el celular: si no hay internet, ahí se queda hasta que se pueda enviar */
+function encolar(rec, resumen, tipo){
+  var c=cola(); c.push(rec); setCola(c);
+  if(rec.tipo==='avance') avanzarLocal(rec.folio,rec.pieza,rec.fase);
+  S.ultimo=tipo;
+  pantalla('<div class="ok"><div class="icon">⏳</div><h2>Enviando…</h2><p class="sub">'+esc(resumen)+'</p></div>');
+  if(!hayScript()){ confirmar(false,resumen); return; }
+  google.script.run
+    .withSuccessHandler(function(){ setCola(cola().filter(function(r){return r.id!==rec.id;})); enLinea=true; pintarEstado(); confirmar(true,resumen); enviarPendientes(); })
+    .withFailureHandler(function(err){
+      var msg=String(err&&err.message||err);
+      if(/cantidad|no válido|No encuentro/i.test(msg)){ setCola(cola().filter(function(r){return r.id!==rec.id;})); pantalla('<div class="card err">No se guardó: '+esc(msg)+'</div><button class="big b2" onclick="menu()">Volver</button>'); return; }
+      enLinea=false; pintarEstado(); confirmar(false,resumen);
+    })
+    .registrar(rec);
+}
+function confirmar(enviado,resumen){
+  var h='<div class="ok"><div class="icon">'+(enviado?'✅':'📱')+'</div><h2>'+(enviado?'¡Listo, registrado!':'Guardado en tu celular')+'</h2>'+
+        '<p class="sub">'+esc(resumen)+'</p>'+
+        (enviado?'':'<div class="warn">No hay internet. Se va a enviar solo cuando regrese la señal. <b>No lo vuelvas a capturar.</b></div>')+'</div>';
+  var i=S.lote?S.datos.lotes.map(function(x){return x.folio;}).indexOf(S.lote.folio):-1;
+  if(S.ultimo==='avance' && i>=0){ h+='<button class="big b1" onclick="detalle('+i+')">Registrar otra fase de este lote</button><button class="big b2" onclick="lotes()">Otro lote</button>'; }
+  else if(S.ultimo==='estante'){ h+='<button class="big b1" onclick="estante()">Tomé otra pieza</button>'; }
+  else if(S.ultimo==='corte'){ h+='<button class="big b1" onclick="corte()">Corté otra pieza</button>'; }
+  h+='<button class="big b2" onclick="menu()">Inicio</button>';
+  pantalla(h);
+}
+
+/* ---------- arranque ---------- */
+pintarEstado();
+cargarDatos(function(){ inicio(); enviarPendientes(); });
+</script>
+</body>
+</html>
