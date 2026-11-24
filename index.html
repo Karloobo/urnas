@@ -58,6 +58,11 @@
   .puntos span.on{background:#1c4587}
   .teclado{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:320px;margin:10px auto}
   .teclado button{padding:18px 0;font-size:26px;font-weight:bold;background:#fff;border:1px solid #d1d5db}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:50}
+  .modal .caja{background:#fff;width:100%;max-width:560px;border-radius:18px 18px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+  .modal h3{margin:0 0 4px;font-size:20px}
+  .modal .linea{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid #eef0f3;font-size:16px}
+  .modal .linea b{font-size:18px;text-align:right}
   .avance{margin-top:14px}
   .av-tit{font-size:14px;color:#4b5563;margin-bottom:8px}
   .av-fila{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:14px}
@@ -99,7 +104,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '1.6';
+var VERSION = '1.7';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -446,13 +451,14 @@ function empacado(oc){
   if(S.papel) h+=quienHtml()+'<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
   h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarEmpacado()">✔ Registrar</button></div>';
   pantalla(h);
-  S.pick.mod.alElegir=function(x){ var rp=repartir(x.val, 1e9); $('cant').value = rp.partes.length ? rp.partes[0].falta : 0; pista(); };
+  S.pick.mod.alElegir=function(x){ $('cant').value=0; pista(); };
   S.alCambiar=pista; $('cant').oninput=pista;
 }
 function pista(){
   var x=elegido('mod'), el=$('pista'); if(!el) return;
   if(!x){ el.innerHTML=''; return; }
-  var cant=parseInt($('cant').value,10)||0; if(cant<=0){ el.innerHTML=''; return; }
+  var cant=parseInt($('cant').value,10)||0;
+  if(cant<=0){ var r0=repartir(x.val,1e9).partes[0]; el.innerHTML = r0 ? '<div class="sub">Este modelo va en el lote <b>'+esc(corto(r0.lote.folio))+'</b> (Semana '+esc(r0.lote.semana)+').</div>' : ''; return; }
   var rp=repartir(x.val,cant), p=rp.partes, h='';
   if(!p.length) h='<div class="warn">Este modelo ya no tiene lotes pendientes de empacar. Si son extras o reposiciones, escríbelo en el comentario.</div>';
   else {
@@ -469,13 +475,15 @@ function guardarEmpacado(){
   if(!x){ $('err').textContent='Elige el modelo que empacaste.'; return; }
   if(cant<=0){ $('err').textContent='Escribe cuántas empacaste (más de 0).'; return; }
   var r=x.val, rp=repartir(r,cant);
-  if(rp.sobra>0 && !confirm('Pusiste '+cant+' pero solo faltan '+(cant-rp.sobra)+' por empacar de este modelo. ¿Registrar de todos modos?')) return;
   var fecha=fechaRegistro();
   var rec={ id:uid(), tipo:'empacado', nombre:S.nombre, ts:fecha, oc:r.oc, codigo:r.codigo, desc:r.desc, cantidad:cant,
             lote:rp.partes.map(function(q){ return q.lote.folio; }).join(', '), semana:semanaHoy(r.oc,fecha), comentario:$('com').value.trim() };
-  r.empacadas+=cant; rp.partes.forEach(function(q){ q.lote.empacadas=(q.lote.empacadas||0)+q.toma; if(q.lote.empacadas>=q.lote.cantidad) q.lote.estado='Terminado'; });
-  guardar('datos',S.datos);
-  encolar(rec, (r.desc||r.modelo)+' · '+cant+' empacadas'+(rec.semana?' · Semana '+rec.semana:''), 'empacado');
+  preguntar([['Modelo',(r.desc||r.modelo)+' ('+r.codigo+')'],['Urnas empacadas',cant]].concat(rec.lote?[['Lote',rp.partes.map(function(q){ return corto(q.lote.folio); }).join(', ')]]:[]).concat(rec.semana?[['Se entrega en','Semana '+rec.semana]]:[]),
+    [rp.sobra>0 ? 'Pusiste '+cant+' pero solo faltan '+(cant-rp.sobra)+' por empacar de este modelo.' : ''], function(){
+    r.empacadas+=cant; rp.partes.forEach(function(q){ q.lote.empacadas=(q.lote.empacadas||0)+q.toma; if(q.lote.empacadas>=q.lote.cantidad) q.lote.estado='Terminado'; });
+    guardar('datos',S.datos);
+    encolar(rec, (r.desc||r.modelo)+' · '+cant+' empacadas'+(rec.semana?' · Semana '+rec.semana:''), 'empacado');
+  });
 }
 
 /* Fases que aplican a este lote (sin las de techo si el modelo no lleva techo) */
@@ -512,7 +520,7 @@ function detalle(i,pieza){
   lista.forEach(function(f){ h+='<option'+(f===sug?' selected':'')+'>'+esc(f)+'</option>'; });
   h+='</select><div class="sug">Va en: '+esc(act&&act!=='—'?act:'sin iniciar')+' → sugerida la siguiente</div>';
   if(miArea()!=='Todas' && S.datos.areasFases) h+='<button class="link" onclick="S.verFases=!S.verFases;detalle('+i+')">'+(S.verFases?'Ver solo fases de '+miArea():'Ver todas las fases')+'</button>';
-  h+='<label>¿Cuántas piezas pasaron?</label>'+stepper('cant',l.cantidad);
+  h+='<label>¿Cuántas piezas pasaron?</label>'+stepper('cant',0);
   h+='<label>¿Se dañó alguna?</label>'+stepper('dan',0);
   h+='<label>Comentario (opcional)</label><input type="text" id="com" maxlength="200">';
   if(S.papel) h+=quienHtml()+'<label>Fecha y hora en que se hizo (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
@@ -531,10 +539,12 @@ function fechaRegistro(){
 function guardarAvance(){
   var cant=parseInt($('cant').value,10)||0, dan=parseInt($('dan').value,10)||0;
   if(cant<=0){ $('err').textContent='Escribe cuántas piezas pasaron (más de 0).'; return; }
-  if(cant>S.lote.cantidad*2){ if(!confirm('¿Seguro? Pusiste '+cant+' y el lote es de '+S.lote.cantidad+'.')) return; }
+  var pz=(PIEZAS.filter(function(p){ return p[0]===S.pieza; })[0]||[0,S.pieza])[1];
   var rec={ id:uid(), tipo:'avance', nombre:S.nombre, ts:fechaRegistro(), folio:S.lote.folio, pieza:S.pieza,
             fase:$('fase').value, cantidad:cant, danadas:dan, comentario:$('com').value.trim() };
-  encolar(rec, corto(S.lote.folio)+' · '+rec.fase, 'avance');
+  preguntar([['Lote',corto(S.lote.folio)],['Pieza',pz],['Fase',rec.fase],['Piezas que pasaron',cant]].concat(dan?[['Dañadas',dan]]:[]),
+    [cant>S.lote.cantidad?'Pusiste '+cant+' y el lote es de '+S.lote.cantidad+'.':''],
+    function(){ encolar(rec, corto(S.lote.folio)+' · '+rec.fase, 'avance'); });
 }
 
 /* ---------- buscador de material/piezas (busca escribiendo o abre la lista completa) ---------- */
@@ -594,8 +604,11 @@ function guardarEstante(){
   var x=elegido('pz'), cant=parseInt($('cant').value,10)||0;
   if(!x){ $('err').textContent='Elige la pieza que tomaste.'; return; }
   if(cant<=0){ $('err').textContent='Escribe cuántas tomaste (más de 0).'; return; }
-  var e=(S.datos.estante||{})[x.val]; if(e){ e.existencia-=cant; if(e.existencia<=0) e.estado='CORTAR YA'; guardar('datos',S.datos); }
-  encolar({ id:uid(), tipo:'estante', nombre:S.nombre, ts:fechaRegistro(), piezaEstante:x.val, cantidad:cant }, x.val+' · '+cant+' piezas', 'estante');
+  var e=(S.datos.estante||{})[x.val];
+  preguntar([['Pieza',x.val],['Cuántas tomaste',cant]], [e && cant>e.existencia ? 'En el sistema solo hay '+e.existencia+'.' : ''], function(){
+    if(e){ e.existencia-=cant; if(e.existencia<=0) e.estado='CORTAR YA'; guardar('datos',S.datos); }
+    encolar({ id:uid(), tipo:'estante', nombre:S.nombre, ts:fechaRegistro(), piezaEstante:x.val, cantidad:cant }, x.val+' · '+cant+' piezas', 'estante');
+  });
 }
 
 function corte(){
@@ -618,7 +631,10 @@ function guardarCorte(){
   var x=elegido('pc'), cant=parseInt($('cant').value,10)||0, hojas=parseInt($('hojas').value,10)||0;
   if(!x){ $('err').textContent='Elige la pieza que cortaste.'; return; }
   if(cant<=0){ $('err').textContent='Escribe cuántas piezas cortaste (más de 0).'; return; }
-  encolar({ id:uid(), tipo:'corte', nombre:S.nombre, ts:fechaRegistro(), piezaCorte:x.val, cantidad:cant, hojas:hojas||'', oc:$('oc').value }, x.val+' · '+cant+' piezas', 'corte');
+  var oc=$('oc').value;
+  preguntar([['Pieza',x.titulo+(x.sub?' · '+String(x.sub).split(' · ')[0]:'')],['Piezas cortadas',cant]].concat(hojas?[['Hojas de MDF',hojas]]:[]).concat(oc?[['Pedido',oc]]:[]), [], function(){
+    encolar({ id:uid(), tipo:'corte', nombre:S.nombre, ts:fechaRegistro(), piezaCorte:x.val, cantidad:cant, hojas:hojas||'', oc:oc }, x.val+' · '+cant+' piezas', 'corte');
+  });
 }
 
 /* ---------- almacén (pintura y ferretería) ---------- */
@@ -630,7 +646,7 @@ function almacen(area){
   ['Pintura','Ferretería'].forEach(function(a){ h+='<button class="'+(S.area===a?'on':'')+'" onclick="almacen(\''+a+'\')">'+(a==='Pintura'?'🎨 ':'🔩 ')+a+'</button>'; });
   h+='</div><label>¿Qué material?</label>'+buscador('art','Escribe: laca, lija, thinner…',items)+
      '<div class="sub" style="margin-top:6px">🟢 hay suficiente · 🟡 ya casi se acaba · 🔴 queda poco</div>'+
-     '<label>¿Cuánto tomaste?</label>'+stepper('cant',1)+
+     '<label>¿Cuánto tomaste?</label>'+stepper('cant',0)+
      '<label>¿Para qué? (opcional)</label><input type="text" id="uso" maxlength="120" placeholder="Ej. pedido OC1655, casitas chocolate">';
   if(S.papel) h+=quienHtml()+'<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
   h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarAlmacen()">✔ Registrar</button></div>';
@@ -640,12 +656,26 @@ function guardarAlmacen(){
   var sel=elegido('art'), x=sel?articulos()[sel.val]:null, cant=parseFloat($('cant').value)||0;
   if(!x){ $('err').textContent='Elige el material que tomaste.'; return; }
   if(cant<=0){ $('err').textContent='Escribe cuánto tomaste (más de 0).'; return; }
-  if(cant>x.existencia && x.existencia>0 && !confirm('En el sistema solo quedan '+x.existencia+' '+x.unidad+'. ¿Seguro que tomaste '+cant+'?')) return;
-  x.existencia=Math.round((x.existencia-cant)*100)/100;
-  if(x.min!=null && x.alerta!=null) x.estado = x.existencia<=x.min ? 'CRÍTICO' : (x.existencia<=x.alerta ? 'POR AGOTARSE' : 'ESTABLE');
-  guardar('datos',S.datos);
-  encolar({ id:uid(), tipo:'almacen', nombre:S.nombre, ts:fechaRegistro(), area:S.area, articulo:x.op, cantidad:cant, uso:$('uso').value.trim() },
-          x.nombre+' · '+cant+' '+x.unidad, 'almacen');
+  var uso=$('uso').value.trim();
+  preguntar([['Material',x.nombre],['Cuánto tomaste',cant+' '+x.unidad]].concat(uso?[['Para qué',uso]]:[]),
+    [cant>x.existencia ? 'En el sistema solo quedan '+x.existencia+' '+x.unidad+'.' : ''], function(){
+    x.existencia=Math.round((x.existencia-cant)*100)/100;
+    if(x.min!=null && x.alerta!=null) x.estado = x.existencia<=x.min ? 'CRÍTICO' : (x.existencia<=x.alerta ? 'POR AGOTARSE' : 'ESTABLE');
+    guardar('datos',S.datos);
+    encolar({ id:uid(), tipo:'almacen', nombre:S.nombre, ts:fechaRegistro(), area:S.area, articulo:x.op, cantidad:cant, uso:uso }, x.nombre+' · '+cant+' '+x.unidad, 'almacen');
+  });
+}
+
+/* Pregunta "¿Estás seguro?" antes de guardar cualquier cantidad capturada a mano */
+function preguntar(lineas, avisos, ok){
+  var d=document.createElement('div'); d.className='modal'; d.id='modal';
+  d.innerHTML='<div class="caja"><h3>¿Estás seguro?</h3><p class="sub">Revisa que la cantidad sea correcta</p>'+
+    lineas.map(function(x){ return '<div class="linea"><span>'+esc(x[0])+'</span><b>'+esc(x[1])+'</b></div>'; }).join('')+
+    (avisos||[]).filter(Boolean).map(function(a){ return '<div class="warn">⚠ '+esc(a)+'</div>'; }).join('')+
+    '<div class="btnrow"><button class="b2" id="mNo">✏️ Corregir</button><button class="b3" id="mSi">✔ Sí, registrar</button></div></div>';
+  document.body.appendChild(d);
+  $('mNo').onclick=function(){ d.parentNode.removeChild(d); };
+  $('mSi').onclick=function(){ d.parentNode.removeChild(d); ok(); };
 }
 
 /* Todo registro pasa primero por el celular: si no hay internet, ahí se queda hasta que se pueda enviar */
