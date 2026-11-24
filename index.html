@@ -53,6 +53,11 @@
   .warn{background:#fff7e0;border:1px solid #ffe599;color:#7f6000;padding:10px 12px;border-radius:12px;font-size:14px;margin-bottom:12px}
   .err{color:#b91c1c;font-size:14px;margin-top:8px}
   .link{background:none;color:#1c4587;text-decoration:underline;padding:8px 0;font-size:15px}
+  .puntos{display:flex;justify-content:center;gap:16px;margin:18px 0 6px}
+  .puntos span{width:18px;height:18px;border-radius:50%;border:2px solid #1c4587}
+  .puntos span.on{background:#1c4587}
+  .teclado{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:320px;margin:10px auto}
+  .teclado button{padding:18px 0;font-size:26px;font-weight:bold;background:#fff;border:1px solid #d1d5db}
   .opc{padding:12px 14px;margin-bottom:6px}
   .opc.n-rojo,.elegido.n-rojo{border-left:6px solid #cc0000}
   .opc.n-amarillo,.elegido.n-amarillo{border-left:6px solid #f1c232}
@@ -78,7 +83,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '1.3';
+var VERSION = '1.4';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -108,6 +113,15 @@ Object.defineProperty(google.script,'run',{get:function(){ return new Runner(); 
 
 /* Funciona sin internet: guarda la app en el celular */
 if('serviceWorker' in navigator){ window.addEventListener('load',function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); }); }
+/* Cuando sale una versión nueva de la app, se recarga sola (solo si no estás llenando un registro) */
+if('serviceWorker' in navigator){
+  var teniaVersion=!!navigator.serviceWorker.controller, yaRecargo=false;
+  navigator.serviceWorker.addEventListener('controllerchange',function(){
+    if(!teniaVersion || yaRecargo) return;
+    if(document.getElementById('cant') || document.querySelector('.teclado')) return;
+    yaRecargo=true; location.reload();
+  });
+}
 if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(function(){}); }
 
 /* Botón "Instalar app" */
@@ -201,10 +215,42 @@ function avanzarLocal(folio,pieza,fase){
 }
 
 /* ---------- pantallas ---------- */
+/* ---------- contraseña (PIN de 4 números) ---------- */
+function sha256(texto){
+  var ascii=unescape(encodeURIComponent(texto));
+  function rr(v,a){ return (v>>>a)|(v<<(32-a)); }
+  var mp=Math.pow, mw=mp(2,32), i, j, res='', words=[], bitLen=ascii.length*8, hash=[], k=[], pc=0, comp={};
+  for(var c=2;pc<64;c++){ if(!comp[c]){ for(i=0;i<313;i+=c) comp[i]=c; hash[pc]=(mp(c,.5)*mw)|0; k[pc++]=(mp(c,1/3)*mw)|0; } }
+  ascii+='\x80'; while(ascii.length%64-56) ascii+='\x00';
+  for(i=0;i<ascii.length;i++){ j=ascii.charCodeAt(i); words[i>>2]|=j<<((3-i)%4)*8; }
+  words[words.length]=((bitLen/mw)|0); words[words.length]=bitLen;
+  for(j=0;j<words.length;){
+    var w=words.slice(j,j+=16), old=hash; hash=hash.slice(0,8);
+    for(i=0;i<64;i++){
+      var w15=w[i-15], w2=w[i-2], a=hash[0], e=hash[4];
+      var t1=hash[7]+(rr(e,6)^rr(e,11)^rr(e,25))+((e&hash[5])^((~e)&hash[6]))+k[i]+(w[i]=(i<16)?w[i]:(w[i-16]+(rr(w15,7)^rr(w15,18)^(w15>>>3))+w[i-7]+(rr(w2,17)^rr(w2,19)^(w2>>>10)))|0);
+      var t2=(rr(a,2)^rr(a,13)^rr(a,22))+((a&hash[1])^(a&hash[2])^(hash[1]&hash[2]));
+      hash=[(t1+t2)|0].concat(hash); hash[4]=(hash[4]+t1)|0;
+    }
+    for(i=0;i<8;i++) hash[i]=(hash[i]+old[i])|0;
+  }
+  for(i=0;i<8;i++) for(j=3;j+1;j--){ var b=(hash[i]>>(j*8))&255; res+=((b<16)?0:'')+b.toString(16); }
+  return res;
+}
+function conPin(){ return !!(S.datos && S.datos.claves); }
+function esAdmin(){ return conPin() && (S.datos.admins||[]).indexOf(S.nombre)>=0; }
+/* ¿La sesión guardada en este celular sigue siendo válida? (si Karlo cambia la contraseña, la vuelve a pedir) */
+function sesionValida(){
+  if(!conPin()) return true;
+  var ses=leer('sesion',null);
+  return !!(ses && ses.nombre===S.nombre && ses.ver===S.datos.claves[S.nombre]);
+}
+
 function inicio(){
   S.nombre=leer('nombre',null);
   if(!S.datos){ pantalla('<div class="card">No se pudieron cargar los datos. Revisa tu internet y vuelve a abrir la app.<br><br>Mientras tanto usa la <b>hoja de registro en papel</b>.</div>'); return; }
-  if(!S.nombre || S.datos.nombres.indexOf(S.nombre)<0) return elegirNombre();
+  if(!S.nombre || S.datos.nombres.indexOf(S.nombre)<0 || !sesionValida()) return elegirNombre();
+  S.firma=(leer('sesion',{})||{}).firma||null;
   menu();
 }
 
@@ -213,19 +259,51 @@ function elegirNombre(){
   S.datos.nombres.forEach(function(n,i){ h+='<button class="name" onclick="setNombre('+i+')">'+esc(n)+'</button>'; });
   pantalla(h+'</div>');
 }
-function setNombre(i){ S.nombre=S.datos.nombres[i]; guardar('nombre',S.nombre); menu(); }
+function setNombre(i){
+  var n=S.datos.nombres[i];
+  if(!conPin()){ S.nombre=n; guardar('nombre',n); menu(); return; }
+  if(!S.datos.claves[n]){ pantalla('<div class="card"><b>'+esc(n)+'</b>, todavía no tienes contraseña.<br><br>Pídele a Karlo que te la asigne y luego toca "Actualizar".</div><button class="big b1" onclick="actualizar()">Actualizar</button><button class="big b2" onclick="elegirNombre()">← Volver</button>'); return; }
+  S.pinDe=n; S.pin=''; pantallaPin();
+}
+function pantallaPin(msg){
+  var h='<button class="back" onclick="elegirNombre()">← Cambiar nombre</button><h2>Hola, '+esc(S.pinDe)+'</h2><p class="sub">Escribe tu contraseña de 4 números</p>'+
+        '<div class="puntos">'+[0,1,2,3].map(function(i){ return '<span class="'+(i<S.pin.length?'on':'')+'"></span>'; }).join('')+'</div>'+
+        '<div class="err" style="text-align:center;min-height:20px">'+(msg||'')+'</div><div class="teclado">';
+  [1,2,3,4,5,6,7,8,9].forEach(function(d){ h+='<button onclick="tecla(\''+d+'\')">'+d+'</button>'; });
+  h+='<span></span><button onclick="tecla(\'0\')">0</button><button onclick="tecla(\'B\')">⌫</button></div>';
+  pantalla(h);
+}
+function tecla(d){
+  if(d==='B'){ S.pin=S.pin.slice(0,-1); return pantallaPin(); }
+  if(S.pin.length>=4) return;
+  S.pin+=d;
+  if(S.pin.length<4) return pantallaPin();
+  var n=S.pinDe, ver=sha256(n+'|'+S.pin+'|ver');
+  if(ver!==S.datos.claves[n]){ S.pin=''; return pantallaPin('Contraseña incorrecta. Intenta otra vez.'); }
+  S.nombre=n; S.firma=sha256(n+'|'+S.pin+'|firma'); S.pin='';
+  guardar('nombre',n); guardar('sesion',{nombre:n, ver:ver, firma:S.firma});
+  menu();
+}
+function salir(){ guardar('sesion',null); S.firma=null; S.papel=false; elegirNombre(); }
+/* En modo hoja de papel, el encargado puede capturar registros de otros */
+function quienHtml(){
+  if(!esAdmin()) return '';
+  var h='<label>¿Quién lo hizo? (de la hoja de papel)</label><select id="quien">';
+  S.datos.nombres.forEach(function(n){ h+='<option'+(n===S.nombre?' selected':'')+'>'+esc(n)+'</option>'; });
+  return h+'</select>';
+}
 
 function menu(){
   var n=cola().length;
   var h='<h2>Hola, '+esc(S.nombre)+'</h2>';
-  if(S.papel) h+='<div class="warn"><b>Modo hoja de papel:</b> vas a poder poner la fecha y hora en que se hizo cada registro. <button class="link" onclick="S.papel=false;menu()">Salir de este modo</button></div>';
+  if(S.papel) h+='<div class="warn"><b>Modo hoja de papel:</b> vas a poder poner la fecha y hora en que se hizo cada registro'+(esAdmin()?' y quién lo hizo':'')+'. <button class="link" onclick="S.papel=false;menu()">Salir de este modo</button></div>';
   if(n) h+='<div class="warn">'+n+' registro(s) guardados en este celular, esperando internet. <button class="link" onclick="enviarPendientes()">Enviar ahora</button></div>';
   h+='<button class="big b1" onclick="lotes()">🔨<span>Avance de un lote<small>Terminé una fase</small></span></button>'+
      '<button class="big b2" onclick="estante()">📦<span>Tomé piezas del estante<small>Saqué piezas para trabajar</small></span></button>'+
      '<button class="big b2" onclick="corte()">🪚<span>Corté piezas<small>Dejé piezas nuevas en el estante</small></span></button>'+
      (S.datos.almacen?'<button class="big b2" onclick="almacen()">🎨<span>Tomé material del almacén<small>Pintura o ferretería</small></span></button>':'')+
      '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-top:8px">'+
-     '<button class="link" onclick="elegirNombre()">No soy '+esc(S.nombre)+'</button>'+
+     '<button class="link" onclick="salir()">No soy '+esc(S.nombre)+' (salir)</button>'+
      '<button class="link" onclick="S.papel=true;menu()">Pasar hoja de papel</button>'+
      '<button class="link" onclick="actualizar()">Actualizar datos</button></div>';
   if(!esInstalada() && (promptInstalar || esIphone())) h+='<button class="big b4" onclick="instalar()">📲<span>Instalar la app en este celular<small>Para abrirla aunque no haya internet</small></span></button>';
@@ -291,7 +369,7 @@ function detalle(i,pieza){
   h+='<label>¿Cuántas piezas pasaron?</label>'+stepper('cant',l.cantidad);
   h+='<label>¿Se dañó alguna?</label>'+stepper('dan',0);
   h+='<label>Comentario (opcional)</label><input type="text" id="com" maxlength="200">';
-  if(S.papel) h+='<label>Fecha y hora en que se hizo (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
+  if(S.papel) h+=quienHtml()+'<label>Fecha y hora en que se hizo (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
   h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarAvance()">✔ Registrar</button></div>';
   pantalla(h);
 }
@@ -356,12 +434,12 @@ function elegido(id){ var P=S.pick&&S.pick[id]; return P&&P.sel!=null ? P.items[
 function estante(){
   var info=S.datos.estante||{};
   var items=(S.datos.piezasEstante||[]).map(function(t){ var p=t.split(' · '), e=info[t];
-    return {val:t, titulo:p[0], sub:[p.slice(1).join(' · '), e?'hay '+e.existencia:''].filter(Boolean).join(' · '), extra:p.slice(1).join(' '), nivel:e?NIVEL_EST[e.estado]:null, queda:e?e.existencia+' piezas':null}; });
+    return {val:t, titulo:p[0], sub:[p.slice(1).join(' · '), e?'hay '+e.existencia+(e.min?' (mínimo '+e.min+')':''):''].filter(Boolean).join(' · '), extra:p.slice(1).join(' '), nivel:e?NIVEL_EST[e.estado]:null, queda:e?e.existencia+' piezas':null}; });
   var h='<button class="back" onclick="menu()">← Inicio</button><h2>Tomé piezas del estante</h2>'+
         '<label>¿Qué pieza?</label>'+buscador('pz','Escribe: wakal, tapa, casita…',items)+
         (Object.keys(info).length?'<div class="sub" style="margin-top:6px">🟢 hay suficiente · 🟡 cortar pronto · 🔴 hay que cortar ya</div>':'')+
         '<label>¿Cuántas?</label>'+stepper('cant',0);
-  if(S.papel) h+='<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
+  if(S.papel) h+=quienHtml()+'<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
   h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarEstante()">✔ Registrar</button></div>';
   pantalla(h);
 }
@@ -385,7 +463,7 @@ function corte(){
         '<label>¿Para qué pedido? (opcional)</label><select id="oc"><option value=""></option>';
   (S.datos.ocs||[]).forEach(function(o){ h+='<option>'+esc(o)+'</option>'; });
   h+='</select>';
-  if(S.papel) h+='<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
+  if(S.papel) h+=quienHtml()+'<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
   h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarCorte()">✔ Registrar</button></div>';
   pantalla(h);
 }
@@ -407,7 +485,7 @@ function almacen(area){
      '<div class="sub" style="margin-top:6px">🟢 hay suficiente · 🟡 ya casi se acaba · 🔴 queda poco</div>'+
      '<label>¿Cuánto tomaste?</label>'+stepper('cant',1)+
      '<label>¿Para qué? (opcional)</label><input type="text" id="uso" maxlength="120" placeholder="Ej. pedido OC1655, casitas chocolate">';
-  if(S.papel) h+='<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
+  if(S.papel) h+=quienHtml()+'<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
   h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarAlmacen()">✔ Registrar</button></div>';
   pantalla(h);
 }
@@ -425,6 +503,8 @@ function guardarAlmacen(){
 
 /* Todo registro pasa primero por el celular: si no hay internet, ahí se queda hasta que se pueda enviar */
 function encolar(rec, resumen, tipo){
+  if(S.papel && $('quien') && $('quien').value && $('quien').value!==S.nombre){ rec.capturo=S.nombre; rec.nombre=$('quien').value; resumen=rec.nombre+' · '+resumen; }
+  if(S.firma) rec.firma=S.firma;
   var c=cola(); c.push(rec); setCola(c);
   if(rec.tipo==='avance') avanzarLocal(rec.folio,rec.pieza,rec.fase);
   S.ultimo=tipo;
