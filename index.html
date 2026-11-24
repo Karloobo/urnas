@@ -78,7 +78,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '1.2';
+var VERSION = '1.3';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -315,8 +315,9 @@ function guardarAvance(){
 
 /* ---------- buscador de material/piezas (busca escribiendo o abre la lista completa) ---------- */
 var NIVEL={ 'CRÍTICO':['rojo','🔴','Queda poco'], 'POR AGOTARSE':['amarillo','🟡','Ya casi se acaba'], 'ESTABLE':['verde','🟢','Hay suficiente'] };
+var NIVEL_EST={ 'CORTAR YA':['rojo','🔴','Hay que cortar ya'], 'CORTAR PRONTO':['amarillo','🟡','Cortar pronto'], 'OK':['verde','🟢','Hay suficiente'] };
 function norm(t){ return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
-/* items: [{val, titulo, sub, estado}] */
+/* items: [{val, titulo, sub, nivel:[color,icono,texto], queda}] */
 function buscador(id, placeholder, items){
   S.pick=S.pick||{}; S.pick[id]={items:items, sel:null, todos:false};
   return '<div id="'+id+'_buscar"><input type="text" id="'+id+'_q" placeholder="'+esc(placeholder)+'" oninput="pintarOpciones(\''+id+'\')" autocomplete="off">'+
@@ -325,7 +326,7 @@ function buscador(id, placeholder, items){
          '<div id="'+id+'_sel"></div>';
 }
 function opcionHtml(id,x,i){
-  var n=NIVEL[x.estado];
+  var n=x.nivel;
   return '<button class="lote opc'+(n?' n-'+n[0]:'')+'" onclick="elegir(\''+id+'\','+i+')"><b>'+(n?n[1]+' ':'')+esc(x.titulo)+'</b>'+(x.sub?'<span>'+esc(x.sub)+'</span>':'')+'</button>';
 }
 function pintarOpciones(id){
@@ -342,7 +343,7 @@ function pintarOpciones(id){
 }
 function verTodos(id){ var P=S.pick[id]; P.todos=!P.todos; $(id+'_q').value=''; pintarOpciones(id); }
 function elegir(id,i){
-  var P=S.pick[id], x=P.items[i], n=NIVEL[x.estado]; P.sel=i;
+  var P=S.pick[id], x=P.items[i], n=x.nivel; P.sel=i;
   $(id+'_buscar').className='hide';
   $(id+'_sel').innerHTML='<div class="elegido'+(n?' n-'+n[0]:'')+'"><div><b>'+esc(x.titulo)+'</b>'+(x.sub&&!(n&&x.queda!=null)?'<span>'+esc(x.sub)+'</span>':'')+'</div>'+
     (n?'<div class="semaforo">'+n[1]+' '+n[2]+(x.queda!=null?' · quedan '+esc(x.queda):'')+'</div>':'')+
@@ -353,9 +354,12 @@ function cambiar(id){ S.pick[id].sel=null; $(id+'_sel').innerHTML=''; $(id+'_bus
 function elegido(id){ var P=S.pick&&S.pick[id]; return P&&P.sel!=null ? P.items[P.sel] : null; }
 
 function estante(){
-  var items=(S.datos.piezasEstante||[]).map(function(t){ var p=t.split(' · '); return {val:t, titulo:p[0], sub:p.slice(1).join(' · ')}; });
+  var info=S.datos.estante||{};
+  var items=(S.datos.piezasEstante||[]).map(function(t){ var p=t.split(' · '), e=info[t];
+    return {val:t, titulo:p[0], sub:[p.slice(1).join(' · '), e?'hay '+e.existencia:''].filter(Boolean).join(' · '), extra:p.slice(1).join(' '), nivel:e?NIVEL_EST[e.estado]:null, queda:e?e.existencia+' piezas':null}; });
   var h='<button class="back" onclick="menu()">← Inicio</button><h2>Tomé piezas del estante</h2>'+
         '<label>¿Qué pieza?</label>'+buscador('pz','Escribe: wakal, tapa, casita…',items)+
+        (Object.keys(info).length?'<div class="sub" style="margin-top:6px">🟢 hay suficiente · 🟡 cortar pronto · 🔴 hay que cortar ya</div>':'')+
         '<label>¿Cuántas?</label>'+stepper('cant',0);
   if(S.papel) h+='<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
   h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarEstante()">✔ Registrar</button></div>';
@@ -365,13 +369,17 @@ function guardarEstante(){
   var x=elegido('pz'), cant=parseInt($('cant').value,10)||0;
   if(!x){ $('err').textContent='Elige la pieza que tomaste.'; return; }
   if(cant<=0){ $('err').textContent='Escribe cuántas tomaste (más de 0).'; return; }
+  var e=(S.datos.estante||{})[x.val]; if(e){ e.existencia-=cant; if(e.existencia<=0) e.estado='CORTAR YA'; guardar('datos',S.datos); }
   encolar({ id:uid(), tipo:'estante', nombre:S.nombre, ts:fechaRegistro(), piezaEstante:x.val, cantidad:cant }, x.val+' · '+cant+' piezas', 'estante');
 }
 
 function corte(){
-  var items=(S.datos.piezasCorte||[]).map(function(x){ return {val:x.codigo, titulo:x.codigo, sub:x.usado}; });
+  var info=S.datos.estante||{};
+  var items=(S.datos.piezasCorte||[]).map(function(x){ var e=info[x.codigo+' · '+x.usado];
+    return {val:x.codigo, titulo:x.codigo, sub:x.usado+(e?' · hay '+e.existencia:''), extra:x.usado, nivel:e?NIVEL_EST[e.estado]:null, queda:e?e.existencia+' piezas':null}; });
   var h='<button class="back" onclick="menu()">← Inicio</button><h2>Corté piezas</h2><p class="sub">Piezas nuevas que dejaste en el estante</p>'+
         '<label>¿Qué pieza?</label>'+buscador('pc','Escribe: wakal, tapa, casita…',items)+
+        (Object.keys(info).length?'<div class="sub" style="margin-top:6px">🔴 = hay que cortar ya · 🟡 = cortar pronto · 🟢 = hay suficiente</div>':'')+
         '<label>¿Cuántas piezas?</label>'+stepper('cant',0)+
         '<label>Hojas de MDF que usaste (opcional)</label>'+stepper('hojas',0)+
         '<label>¿Para qué pedido? (opcional)</label><select id="oc"><option value=""></option>';
@@ -392,7 +400,7 @@ function guardarCorte(){
 function articulos(){ return (S.datos.almacen&&S.datos.almacen[S.area])||[]; }
 function almacen(area){
   S.area=area||S.area||'Pintura';
-  var items=articulos().map(function(x,i){ return {val:i, titulo:x.nombre, sub:'Quedan '+x.existencia+' '+x.unidad, extra:x.codigo, estado:x.estado, queda:x.existencia+' '+x.unidad}; });
+  var items=articulos().map(function(x,i){ return {val:i, titulo:x.nombre, sub:'Quedan '+x.existencia+' '+x.unidad, extra:x.codigo, nivel:NIVEL[x.estado], queda:x.existencia+' '+x.unidad}; });
   var h='<button class="back" onclick="menu()">← Inicio</button><h2>Tomé material del almacén</h2><div class="seg">';
   ['Pintura','Ferretería'].forEach(function(a){ h+='<button class="'+(S.area===a?'on':'')+'" onclick="almacen(\''+a+'\')">'+(a==='Pintura'?'🎨 ':'🔩 ')+a+'</button>'; });
   h+='</div><label>¿Qué material?</label>'+buscador('art','Escribe: laca, lija, thinner…',items)+
