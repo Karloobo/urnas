@@ -147,7 +147,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '2.3';
+var VERSION = '2.4';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -380,6 +380,7 @@ function menu(){
      (S.datos.terminados?'<button class="big b2" onclick="terminados()">🏷️<span>Almacén de terminados<small>Urnas terminadas guardadas: entran o salen</small></span></button>':'')+
      '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-top:8px">'+
      '<button class="link" onclick="salir()">No soy '+esc(S.nombre)+' (salir)</button>'+
+     '<button class="link" onclick="S.papel=true;menu()">Pasar hoja de papel</button>'+
      '<button class="link" onclick="actualizar()">Actualizar datos</button></div>';
   h+='<div class="grid2 mas"><button class="b2 chico" onclick="misRegistros()">🧾 Mis registros de hoy</button><button class="b2 chico" onclick="problema()">⚠️ Reportar un problema</button>'+
 '</div>';
@@ -1002,11 +1003,45 @@ function toqueTitulo(){
 function vistaEncargado(){
   if(!esAdmin()) return menu();
   S.desdeEnc=true;
-  var h='<button class="back" onclick="S.desdeEnc=false;menu()">← Inicio</button><h2>🔑 Vista de encargado</h2><p class="sub">Operaciones que solo pueden hacer los encargados</p>'+
-    '<button class="big b1" onclick="panelEncargado()">📊<span>Panel del encargado<small>Avance, atrasos, quién registró hoy, problemas y anular registros</small></span></button>'+
-    (S.datos.almacen?'<button class="big b2" onclick="entrada()">📥<span>Llegó material<small>Entradas al almacén de pintura y ferretería</small></span></button>':'')+
-    '<button class="big b2" onclick="S.papel=true;S.desdeEnc=false;menu()">📝<span>Pasar hoja de papel<small>Capturar lo que se anotó en papel, a nombre de quien lo hizo y con su fecha</small></span></button>'+
-    '<button class="big b2" onclick="actualizar()">🔄<span>Actualizar datos<small>Bajar lo más nuevo de la hoja</small></span></button>';
+  var h='<button class="back" onclick="S.desdeEnc=false;menu()">← Inicio</button><h2>🔑 Vista de encargado</h2><p class="sub">Solo para encargados</p>'+
+    (S.datos.almacen?'<button class="big b1" onclick="entrada()">📥<span>Llegó material<small>Entradas al almacén de pintura y ferretería</small></span></button>':'')+
+    '<button class="big b2" onclick="progresoAreas()">📈<span>Progreso por área<small>Corte, Lijado, Pintura y Empacado de cada pedido, por semana y por lote</small></span></button>';
+  pantalla(h);
+}
+/* Avance de un grupo de lotes en cada área (0 a 1), ponderado por cantidad */
+function avanceGrupo(ls){
+  var t=0, r={Corte:0,Lijado:0,Pintura:0,Empacado:0};
+  ls.forEach(function(l){ var a=avanceLote(l); t+=l.cantidad; AREAS.forEach(function(k){ r[k]+=a[k]*l.cantidad; }); r.Empacado+=Math.min(l.empacadas||0,l.cantidad); });
+  if(t) Object.keys(r).forEach(function(k){ r[k]/=t; });
+  r.urnas=t; return r;
+}
+function barras(a, chico){
+  return AREAS.concat(['Empacado']).map(function(k){
+    var p=Math.round(a[k]*100);
+    return '<div class="av-fila"'+(chico?' style="font-size:12px;margin:3px 0"':'')+'><span class="av-nom">'+k+'</span><span class="av-barra"'+(chico?' style="height:9px"':'')+'><i style="width:'+p+'%;background:'+COLOR_AREA[k]+'"></i></span><span class="av-pct">'+p+'%</span></div>';
+  }).join('');
+}
+function progresoAreas(){
+  if(!esAdmin()) return menu();
+  var h='<button class="back" onclick="vistaEncargado()">← Vista de encargado</button><h2>📈 Progreso por área</h2><p class="sub">Según la última fase registrada de cada pieza. Empacado = urnas empacadas.</p>';
+  var ocs=S.datos.ocs||[];
+  if(!ocs.length) h+='<div class="card">No hay pedidos activos.</div>';
+  ocs.forEach(function(oc){
+    var ls=S.datos.lotes.filter(function(l){ return l.oc===oc; }); if(!ls.length) return;
+    var a=avanceGrupo(ls), atr=ls.filter(function(l){ return l.estado==='Atrasado'; }).length;
+    h+='<div class="card avance"><div class="av-tit">Pedido <b>'+esc(oc)+'</b> · '+a.urnas+' urnas · '+ls.length+' lotes'+(atr?' · <span style="color:#b00020">'+atr+' atrasado(s)</span>':'')+'</div>'+barras(a)+'</div>';
+    var sems={}; ls.forEach(function(l){ (sems[l.semana]=sems[l.semana]||[]).push(l); });
+    Object.keys(sems).sort(function(x,y){ return (Number(x)||0)-(Number(y)||0); }).forEach(function(sm){
+      var g=sems[sm], ag=avanceGrupo(g);
+      h+='<div class="card"><b>Semana '+esc(sm)+'</b> <span class="sub">· '+ag.urnas+' urnas</span>'+barras(ag,true)+
+         '<details style="margin-top:6px"><summary class="sub">Ver cada lote ('+g.length+')</summary>'+
+         g.map(function(l){ var al=avanceLote(l), e=Math.round(Math.min(l.empacadas||0,l.cantidad)/(l.cantidad||1)*100);
+           return '<div style="margin-top:8px"><b style="font-size:13px">'+esc(corto(l.folio))+'</b> '+tagEstado(l.estado)+'<div class="mini" style="font-size:12px">'+
+             AREAS.map(function(k){ return '<em style="font-style:normal;margin-right:8px;color:'+COLOR_AREA[k]+'">'+k+' '+Math.round(al[k]*100)+'%</em>'; }).join('')+
+             '<em style="font-style:normal;color:'+COLOR_AREA.Empacado+'">Empacado '+e+'%</em></div></div>'; }).join('')+
+         '</details></div>';
+    });
+  });
   pantalla(h);
 }
 /* ---------- panel del encargado ---------- */
