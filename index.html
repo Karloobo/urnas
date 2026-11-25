@@ -147,7 +147,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '2.4';
+var VERSION = '2.5';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -912,7 +912,8 @@ function misRegistros(){
   pantalla(html);
 }
 function anularReg(id, alTerminar){
-  var x=hist().filter(function(r){ return r.id===id; })[0]||{resumen:'Registro', id:id, estado:'enviado'};
+  var x=hist().filter(function(r){ return r.id===id; })[0];
+  if(!x){ var u=((S.panelDatos&&S.panelDatos.ultimos)||[]).filter(function(r){ return r.id===id; })[0]; x={resumen:u?u.nombre+' · '+u.texto:'Registro', id:id, estado:'enviado'}; }
   preguntar([['Registro',x.resumen]], ['Se va a borrar de la hoja como si nunca se hubiera registrado.'], function(){
     if(x.estado==='pendiente' && cola().some(function(r){ return r.id===id; })){
       setCola(cola().filter(function(r){ return r.id!==id; })); histMarcar(id,'anulado'); cargarDatos(function(){}); (alTerminar||misRegistros)(); return;
@@ -1005,8 +1006,45 @@ function vistaEncargado(){
   S.desdeEnc=true;
   var h='<button class="back" onclick="S.desdeEnc=false;menu()">← Inicio</button><h2>🔑 Vista de encargado</h2><p class="sub">Solo para encargados</p>'+
     (S.datos.almacen?'<button class="big b1" onclick="entrada()">📥<span>Llegó material<small>Entradas al almacén de pintura y ferretería</small></span></button>':'')+
-    '<button class="big b2" onclick="progresoAreas()">📈<span>Progreso por área<small>Corte, Lijado, Pintura y Empacado de cada pedido, por semana y por lote</small></span></button>';
+    '<button class="big b2" onclick="progresoAreas()">📈<span>Progreso por área<small>Corte, Lijado, Pintura y Empacado de cada pedido, por semana y por lote</small></span></button>'+
+    '<button class="big b2" onclick="anularRegistros()">🧾<span>Anular registros<small>Registros de todos de los últimos 7 días; anula los que estén mal</small></span></button>'+
+    '<button class="big b2" onclick="problemasEnc()">⚠️<span>Problemas reportados<small>Ver los pendientes (con foto en tu correo) y marcarlos como resueltos</small></span></button>';
   pantalla(h);
+}
+/* Pide al servidor los registros y problemas (necesita internet) */
+function cargarPanel(titulo, pintar){
+  if(!esAdmin()) return menu();
+  pantalla('<button class="back" onclick="vistaEncargado()">← Vista de encargado</button><h2>'+titulo+'</h2><div id="panelSrv"><p class="sub">Cargando…</p></div>');
+  google.script.run
+    .withSuccessHandler(function(d){ if($('panelSrv')){ S.panelDatos=d; $('panelSrv').innerHTML=pintar(d); } })
+    .withFailureHandler(function(err){ if($('panelSrv')) $('panelSrv').innerHTML='<div class="card">Se necesita internet para esto.<br><small>'+esc(String(err&&err.message||err).replace(/^SIN_RED:\s*/,''))+'</small></div>'; })
+    .panel({ nombre:S.nombre, firma:S.firma });
+}
+function anularRegistros(){ cargarPanel('🧾 Anular registros', registrosHtml); }
+function registrosHtml(d){
+  var nombres=[]; (d.ultimos||[]).forEach(function(r){ if(nombres.indexOf(r.nombre)<0) nombres.push(r.nombre); });
+  var h='<p class="sub">Los últimos 40 registros de los últimos 7 días, de todos. Al anular uno se borra de la hoja.</p>'+
+    '<select id="fquien" onchange="filtrarRegs()"><option value="">Todos</option>'+nombres.map(function(n){ return '<option>'+esc(n)+'</option>'; }).join('')+'</select>'+
+    '<div id="listaRegs"></div>';
+  setTimeout(filtrarRegs,0);
+  return h;
+}
+function filtrarRegs(){
+  var d=S.panelDatos||{}, q=$('fquien')?$('fquien').value:'', h='';
+  (d.ultimos||[]).filter(function(r){ return !q || r.nombre===q; }).forEach(function(r){
+    h+='<div class="card reg"><div><small>'+esc(r.cuando)+' · '+esc(r.nombre)+'</small><br>'+esc(r.texto)+'</div><button class="bR chico" onclick="anularReg(\''+esc(r.id)+'\', anularRegistros)">Anular</button></div>';
+  });
+  if($('listaRegs')) $('listaRegs').innerHTML = h || '<div class="card">No hay registros.</div>';
+}
+function problemasEnc(){ cargarPanel('⚠️ Problemas reportados', problemasHtml); }
+function problemasHtml(d){
+  var ps=d.problemas||[];
+  if(!ps.length) return '<div class="card">No hay problemas pendientes 👍</div>';
+  return '<p class="sub">Pendientes ('+ps.length+'). Cuando ya esté arreglado, márcalo como resuelto.</p>'+ps.map(function(p){
+    return '<div class="card"><small>'+esc(p.fecha)+' · '+esc(p.quien)+' · '+esc(p.tipo)+(p.lote?' · '+esc(corto(p.lote)):'')+'</small><br>'+esc(p.desc)+
+      (/^https?:/.test(p.foto)?'<br><a href="'+esc(p.foto)+'" target="_blank" rel="noopener">📷 Ver foto</a>':(p.foto?'<br><small>📷 La foto está en tu correo</small>':''))+
+      '<div class="btnrow"><button class="b3" onclick="resolverProb(\''+esc(p.id)+'\')">✔ Marcar resuelto</button></div></div>';
+  }).join('');
 }
 /* Avance de un grupo de lotes en cada área (0 a 1), ponderado por cantidad */
 function avanceGrupo(ls){
@@ -1082,7 +1120,7 @@ function panelSrvHtml(d){
   return h+'</div>';
 }
 function resolverProb(id){
-  google.script.run.withSuccessHandler(function(){ panelEncargado(); }).withFailureHandler(function(e){ alert('No se pudo: '+String(e&&e.message||e)); }).resolver({ id:id, nombre:S.nombre, firma:S.firma });
+  google.script.run.withSuccessHandler(function(){ problemasEnc(); }).withFailureHandler(function(e){ alert('No se pudo: '+String(e&&e.message||e)); }).resolver({ id:id, nombre:S.nombre, firma:S.firma });
 }
 
 /* ---------- modo oscuro: Automático (como el celular) / Oscuro / Claro ---------- */
