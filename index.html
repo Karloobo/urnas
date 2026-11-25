@@ -138,7 +138,7 @@
 </head>
 <body>
 <header>
-  <h1>Producción de urnas</h1>
+  <h1 onclick="toqueTitulo()" style="-webkit-user-select:none;user-select:none;cursor:default">Producción de urnas</h1>
   <span id="estado" class="pill">Conectando…</span>
 </header>
 <main id="app"><p>Cargando…</p></main>
@@ -147,7 +147,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '2.2';
+var VERSION = '2.3';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -376,13 +376,13 @@ function menu(){
   h+='<button class="big b1" onclick="lotes()">🔨<span>Avance de un lote<small>Terminé una fase</small></span></button>'+
      '<button class="big b2" onclick="estante()">📦<span>Tomé piezas del estante<small>Saqué piezas para trabajar</small></span></button>'+
      '<button class="big b2" onclick="corte()">🪚<span>Corté piezas<small>Dejé piezas nuevas en el estante</small></span></button>'+
-     (S.datos.almacen?'<button class="big b2" onclick="almacen(null,\'Salida\')">🎨<span>Almacén de pintura y ferretería<small>Tomé material o llegó material</small></span></button>':'')+
+     (S.datos.almacen?'<button class="big b2" onclick="almacen(null,\'Salida\')">🎨<span>Almacén de pintura y ferretería<small>'+(esAdmin()?'Tomé material o llegó material':'Tomé material')+'</small></span></button>':'')+
      (S.datos.terminados?'<button class="big b2" onclick="terminados()">🏷️<span>Almacén de terminados<small>Urnas terminadas guardadas: entran o salen</small></span></button>':'')+
      '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-top:8px">'+
      '<button class="link" onclick="salir()">No soy '+esc(S.nombre)+' (salir)</button>'+
      '<button class="link" onclick="actualizar()">Actualizar datos</button></div>';
   h+='<div class="grid2 mas"><button class="b2 chico" onclick="misRegistros()">🧾 Mis registros de hoy</button><button class="b2 chico" onclick="problema()">⚠️ Reportar un problema</button>'+
-     (esAdmin()?'<button class="b2 chico enc" style="grid-column:1/-1" onclick="vistaEncargado()">🔑 Vista de encargado<br><small>Panel, entradas de almacén y hojas de papel</small></button>':'')+'</div>';
+'</div>';
   h+=barrasAvance();
   h+='<button class="link tema" onclick="cambiarTema()">'+TEMAS[leer('tema','auto')]+'</button>';
   if(!esInstalada() && (promptInstalar || esIphone())) h+='<button class="big b4" onclick="instalar()">📲<span>Instalar la app en este celular<small>Para abrirla aunque no haya internet</small></span></button>';
@@ -813,6 +813,7 @@ function guardarCorte(){
 function articulos(){ return (S.datos.almacen&&S.datos.almacen[S.area])||[]; }
 function segMovAlm(){
   var m=S.almMov||'Salida';
+  if(!esAdmin()) return '';
   return '<div class="seg"><button class="'+(m==='Salida'?'on':'')+'" onclick="almacen(null,\'Salida\')">⬆️ Salen<br><small>Tomé material</small></button><button class="'+(m==='Entrada'?'on':'')+'" onclick="almacen(null,\'Entrada\')">⬇️ Entran<br><small>Llegó material</small></button></div>';
 }
 function almacen(area,mov){
@@ -967,11 +968,7 @@ function guardarProblema(){
 function entrada(area){
   S.almMov='Entrada';
   S.area=area||S.area||'Pintura';
-  if(!esAdmin()){
-    pantalla('<button class="back" onclick="menu()">← Inicio</button><h2>🎨 Almacén de pintura y ferretería</h2>'+segMovAlm()+
-      '<div class="card">🔒 Las <b>entradas</b> (material que llegó) solo las registra el encargado.<br><br>Si llegó material, avísale para que lo registre.</div>');
-    return;
-  }
+  if(!esAdmin()){ S.almMov='Salida'; return almacen(null,'Salida'); }
   var items=articulos().map(function(x,i){ return {val:i, titulo:x.nombre, sub:'Hay '+x.existencia+' '+x.unidad, extra:x.codigo, nivel:NIVEL[x.estado], queda:x.existencia+' '+x.unidad}; });
   var h='<button class="back" onclick="'+(S.desdeEnc?'vistaEncargado()':'menu()')+'">← '+(S.desdeEnc?'Vista de encargado':'Inicio')+'</button><h2>🎨 Almacén de pintura y ferretería</h2>'+segMovAlm()+'<p class="sub">🔑 Entrada al almacén (solo encargado)</p><label>¿De qué almacén?</label><div class="seg">';
   ['Pintura','Ferretería'].forEach(function(a){ h+='<button class="'+(S.area===a?'on':'')+'" onclick="entrada(\''+a+'\')">'+(a==='Pintura'?'🎨 ':'🔩 ')+a+'</button>'; });
@@ -993,6 +990,14 @@ function guardarEntrada(){
   });
 }
 
+/* ---------- vista de encargado (solo administradores) ----------
+   No aparece en el menú: se abre tocando 3 veces seguidas el título "Producción de urnas".
+   Si quien está en la app no es encargado, no pasa nada. */
+var TOQUES=[];
+function toqueTitulo(){
+  var t=Date.now(); TOQUES=TOQUES.filter(function(x){ return t-x<1500; }); TOQUES.push(t);
+  if(TOQUES.length>=3){ TOQUES=[]; if(S.datos && S.nombre && esAdmin()) vistaEncargado(); }
+}
 /* ---------- vista de encargado (solo administradores) ---------- */
 function vistaEncargado(){
   if(!esAdmin()) return menu();
