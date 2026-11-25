@@ -147,7 +147,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '2.5';
+var VERSION = '2.6';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -375,7 +375,7 @@ function menu(){
   if(n) h+='<div class="warn">'+n+' registro(s) guardados en este celular, esperando internet. <button class="link" onclick="enviarPendientes()">Enviar ahora</button></div>';
   h+='<button class="big b1" onclick="lotes()">🔨<span>Avance de un lote<small>Terminé una fase</small></span></button>'+
      '<button class="big b2" onclick="estante()">📦<span>Tomé piezas del estante<small>Saqué piezas para trabajar</small></span></button>'+
-     '<button class="big b2" onclick="corte()">🪚<span>Corté piezas<small>Dejé piezas nuevas en el estante</small></span></button>'+
+     (esAdmin()?'<button class="big b2" onclick="corte()">🪚<span>Corté piezas<small>Dejé piezas nuevas en el estante</small></span></button>':'')+
      (S.datos.almacen?'<button class="big b2" onclick="almacen(null,\'Salida\')">🎨<span>Almacén de pintura y ferretería<small>'+(esAdmin()?'Tomé material o llegó material':'Tomé material')+'</small></span></button>':'')+
      (S.datos.terminados?'<button class="big b2" onclick="terminados()">🏷️<span>Almacén de terminados<small>Urnas terminadas guardadas: entran o salen</small></span></button>':'')+
      '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-top:8px">'+
@@ -785,6 +785,7 @@ function guardarEstante(){
 }
 
 function corte(){
+  if(!esAdmin()) return menu();
   var info=S.datos.estante||{};
   var items=(S.datos.piezasCorte||[]).map(function(x){ var e=info[x.codigo+' · '+x.usado];
     return {val:x.codigo, titulo:x.codigo, sub:x.usado+(e?' · hay '+e.existencia:''), extra:x.usado, nivel:e?NIVEL_EST[e.estado]:null, queda:e?e.existencia+' piezas':null}; });
