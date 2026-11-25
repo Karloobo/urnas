@@ -147,7 +147,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '1.9';
+var VERSION = '2.0';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -892,7 +892,7 @@ function panelSrvHtml(d){
   h+='<div class="card"><b>⚠️ Problemas sin resolver ('+(d.problemas||[]).length+')</b>';
   (d.problemas||[]).forEach(function(p){
     h+='<div class="prob"><small>'+esc(p.fecha)+' · '+esc(p.quien)+' · '+esc(p.tipo)+(p.lote?' · '+esc(corto(p.lote)):'')+'</small><br>'+esc(p.desc)+
-       (p.foto?'<br><a href="'+esc(p.foto)+'" target="_blank" rel="noopener">📷 Ver foto</a>':'')+
+       (/^https?:/.test(p.foto)?'<br><a href="'+esc(p.foto)+'" target="_blank" rel="noopener">📷 Ver foto</a>':(p.foto?'<br>📷 Foto en tu correo':''))+
        '<br><button class="link" onclick="resolverProb(\''+esc(p.id)+'\')">✔ Marcar resuelto</button></div>';
   });
   if(!(d.problemas||[]).length) h+='<br><span class="sub">Ninguno 👍</span>';

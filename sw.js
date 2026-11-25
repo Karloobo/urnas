@@ -1,6 +1,6 @@
 /* Guarda la app en el celular para que abra sin internet.
    Cuando subas cambios, sube también este archivo cambiando el número de VERSION. */
-var VERSION = 'urnas-v1.9';
+var VERSION = 'urnas-v2.0';
 var ARCHIVOS = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', function (e) {
