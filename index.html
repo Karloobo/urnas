@@ -75,6 +75,37 @@
   textarea{width:100%;font:inherit;padding:12px;border:1px solid #d1d5db;border-radius:12px}
   label.foto{display:block;text-align:center;padding:14px;border:2px dashed #9ca3af;border-radius:12px;color:#1c4587;font-weight:bold;font-size:16px}
   label.foto input{display:none}
+  /* ---------- modo oscuro ---------- */
+  body.oscuro{background:#111827;color:#e5e7eb}
+  .oscuro header{background:#0f172a}
+  .oscuro .card,.oscuro .lote,.oscuro .b2,.oscuro .seg button,.oscuro select,.oscuro input,.oscuro textarea,.oscuro .step button,.oscuro .teclado button,.oscuro .elegido,.oscuro .modal .caja{background:#1f2937;color:#e5e7eb;border-color:#374151}
+  .oscuro .seg button.on{background:#3b82f6;border-color:#3b82f6;color:#fff}
+  .oscuro .name{background:#1e3a5f;color:#dbeafe}
+  .oscuro .sub,.oscuro .lote span,.oscuro .elegido span,.oscuro .av-tit,.oscuro label,.oscuro .ver{color:#9ca3af}
+  .oscuro .warn{background:#3b2f0b;border-color:#7f6000;color:#fde68a}
+  .oscuro .oc{color:#9ca3af}
+  .oscuro .oc.pedido{color:#93c5fd}
+  .oscuro .oc.semana{background:#1e3a5f;color:#bfdbfe}
+  .oscuro .oc.semana span{color:#9ca3af}
+  .oscuro .av-barra{background:#374151}
+  .oscuro .back,.oscuro .link{color:#93c5fd}
+  .oscuro .b1{background:#2563eb}
+  .oscuro .b3{background:#15803d}
+  .oscuro .modal .linea,.oscuro .prob{border-color:#374151}
+  .oscuro .t-Sin{background:#374151;color:#d1d5db}
+  .oscuro .t-En{background:#1e3a5f;color:#bfdbfe}
+  .oscuro .t-Ter{background:#14532d;color:#bbf7d0}
+  .oscuro .t-Atr{background:#7f1d1d;color:#fecaca}
+  .oscuro .ok-lote,.oscuro .n-verde .semaforo{background:#14532d;color:#bbf7d0}
+  .oscuro .ok-lote.parcial,.oscuro .n-amarillo .semaforo{background:#3b2f0b;color:#fde68a}
+  .oscuro .n-rojo .semaforo{background:#7f1d1d;color:#fecaca}
+  .oscuro .chico.enc{background:#3b2f0b;border-color:#7f6000;color:#fde68a}
+  .oscuro label.foto{border-color:#4b5563;color:#93c5fd}
+  .oscuro .err{color:#f87171}
+  .oscuro .puntos span{border-color:#93c5fd}
+  .oscuro .puntos span.on{background:#93c5fd}
+  .oscuro .lote .mini em{filter:brightness(1.6)}
+  .tema{display:block;margin:10px auto 0;font-size:13px}
   .avance{margin-top:14px}
   .av-tit{font-size:14px;color:#4b5563;margin-bottom:8px}
   .av-fila{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:14px}
@@ -116,7 +147,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '1.8';
+var VERSION = '1.9';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -352,6 +383,7 @@ function menu(){
   h+='<div class="grid2 mas"><button class="b2 chico" onclick="misRegistros()">🧾 Mis registros de hoy</button><button class="b2 chico" onclick="problema()">⚠️ Reportar un problema</button>'+
      (esAdmin()?'<button class="b2 chico enc" onclick="panelEncargado()">📊 Panel del encargado</button>'+(S.datos.almacen?'<button class="b2 chico enc" onclick="entrada()">📥 Llegó material</button>':''):'')+'</div>';
   h+=barrasAvance();
+  h+='<button class="link tema" onclick="cambiarTema()">'+TEMAS[leer('tema','auto')]+'</button>';
   if(!esInstalada() && (promptInstalar || esIphone())) h+='<button class="big b4" onclick="instalar()">📲<span>Instalar la app en este celular<small>Para abrirla aunque no haya internet</small></span></button>';
   h+='<div class="ver">Versión '+VERSION+(S.datos&&S.datos.actualizado?' · datos del '+new Date(S.datos.actualizado).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'')+'</div>';
   pantalla(h);
@@ -873,6 +905,18 @@ function panelSrvHtml(d){
 function resolverProb(id){
   google.script.run.withSuccessHandler(function(){ panelEncargado(); }).withFailureHandler(function(e){ alert('No se pudo: '+String(e&&e.message||e)); }).resolver({ id:id, nombre:S.nombre, firma:S.firma });
 }
+
+/* ---------- modo oscuro: Automático (como el celular) / Oscuro / Claro ---------- */
+var TEMAS={auto:'🌗 Tema: automático', oscuro:'🌙 Tema: oscuro', claro:'☀️ Tema: claro'};
+function aplicarTema(){
+  var t=leer('tema','auto'), sis=window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
+  var osc = t==='oscuro' || (t==='auto' && sis);
+  document.body.classList.toggle('oscuro', osc);
+  var m=document.querySelector('meta[name=theme-color]'); if(m) m.setAttribute('content', osc?'#0f172a':'#1c4587');
+}
+function cambiarTema(){ var orden=['auto','oscuro','claro'], t=leer('tema','auto'); guardar('tema', orden[(orden.indexOf(t)+1)%3]); aplicarTema(); menu(); }
+if(window.matchMedia){ var mq=matchMedia('(prefers-color-scheme: dark)'); if(mq.addEventListener) mq.addEventListener('change',aplicarTema); else if(mq.addListener) mq.addListener(aplicarTema); }
+aplicarTema();
 
 /* ---------- arranque ---------- */
 pintarEstado();
