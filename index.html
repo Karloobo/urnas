@@ -147,7 +147,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '2.1';
+var VERSION = '2.2';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -368,6 +368,7 @@ function quienHtml(){
 }
 
 function menu(){
+  S.desdeEnc=false;
   var n=cola().length;
   var h='<h2>Hola, '+esc(S.nombre)+(miArea()!=='Todas'?' <span class="tag t-En">'+miArea()+'</span>':'')+'</h2>';
   if(S.papel) h+='<div class="warn"><b>Modo hoja de papel:</b> vas a poder poner la fecha y hora en que se hizo cada registro'+(esAdmin()?' y quién lo hizo':'')+'. <button class="link" onclick="S.papel=false;menu()">Salir de este modo</button></div>';
@@ -375,14 +376,13 @@ function menu(){
   h+='<button class="big b1" onclick="lotes()">🔨<span>Avance de un lote<small>Terminé una fase</small></span></button>'+
      '<button class="big b2" onclick="estante()">📦<span>Tomé piezas del estante<small>Saqué piezas para trabajar</small></span></button>'+
      '<button class="big b2" onclick="corte()">🪚<span>Corté piezas<small>Dejé piezas nuevas en el estante</small></span></button>'+
-     (S.datos.almacen?'<button class="big b2" onclick="almacen()">🎨<span>Tomé material del almacén<small>Pintura o ferretería</small></span></button>':'')+
+     (S.datos.almacen?'<button class="big b2" onclick="almacen(null,\'Salida\')">🎨<span>Almacén de pintura y ferretería<small>Tomé material o llegó material</small></span></button>':'')+
      (S.datos.terminados?'<button class="big b2" onclick="terminados()">🏷️<span>Almacén de terminados<small>Urnas terminadas guardadas: entran o salen</small></span></button>':'')+
      '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-top:8px">'+
      '<button class="link" onclick="salir()">No soy '+esc(S.nombre)+' (salir)</button>'+
-     '<button class="link" onclick="S.papel=true;menu()">Pasar hoja de papel</button>'+
      '<button class="link" onclick="actualizar()">Actualizar datos</button></div>';
   h+='<div class="grid2 mas"><button class="b2 chico" onclick="misRegistros()">🧾 Mis registros de hoy</button><button class="b2 chico" onclick="problema()">⚠️ Reportar un problema</button>'+
-     (esAdmin()?'<button class="b2 chico enc" onclick="panelEncargado()">📊 Panel del encargado</button>'+(S.datos.almacen?'<button class="b2 chico enc" onclick="entrada()">📥 Llegó material</button>':''):'')+'</div>';
+     (esAdmin()?'<button class="b2 chico enc" style="grid-column:1/-1" onclick="vistaEncargado()">🔑 Vista de encargado<br><small>Panel, entradas de almacén y hojas de papel</small></button>':'')+'</div>';
   h+=barrasAvance();
   h+='<button class="link tema" onclick="cambiarTema()">'+TEMAS[leer('tema','auto')]+'</button>';
   if(!esInstalada() && (promptInstalar || esIphone())) h+='<button class="big b4" onclick="instalar()">📲<span>Instalar la app en este celular<small>Para abrirla aunque no haya internet</small></span></button>';
@@ -811,10 +811,16 @@ function guardarCorte(){
 
 /* ---------- almacén (pintura y ferretería) ---------- */
 function articulos(){ return (S.datos.almacen&&S.datos.almacen[S.area])||[]; }
-function almacen(area){
+function segMovAlm(){
+  var m=S.almMov||'Salida';
+  return '<div class="seg"><button class="'+(m==='Salida'?'on':'')+'" onclick="almacen(null,\'Salida\')">⬆️ Salen<br><small>Tomé material</small></button><button class="'+(m==='Entrada'?'on':'')+'" onclick="almacen(null,\'Entrada\')">⬇️ Entran<br><small>Llegó material</small></button></div>';
+}
+function almacen(area,mov){
+  if(mov) S.almMov=mov;
+  if(S.almMov==='Entrada') return entrada(area);
   S.area=area||S.area||'Pintura';
   var items=articulos().map(function(x,i){ return {val:i, titulo:x.nombre, sub:'Quedan '+x.existencia+' '+x.unidad, extra:x.codigo, nivel:NIVEL[x.estado], queda:x.existencia+' '+x.unidad}; });
-  var h='<button class="back" onclick="menu()">← Inicio</button><h2>Tomé material del almacén</h2><div class="seg">';
+  var h='<button class="back" onclick="menu()">← Inicio</button><h2>🎨 Almacén de pintura y ferretería</h2>'+segMovAlm()+'<label>¿De qué almacén?</label><div class="seg">';
   ['Pintura','Ferretería'].forEach(function(a){ h+='<button class="'+(S.area===a?'on':'')+'" onclick="almacen(\''+a+'\')">'+(a==='Pintura'?'🎨 ':'🔩 ')+a+'</button>'; });
   h+='</div><label>¿Qué material?</label>'+buscador('art','Escribe: laca, lija, thinner…',items)+
      '<div class="sub" style="margin-top:6px">🟢 hay suficiente · 🟡 ya casi se acaba · 🔴 queda poco</div>'+
@@ -878,8 +884,8 @@ function confirmar(enviado,resumen){
   else if(S.ultimo==='estante'){ h+='<button class="big b1" onclick="estante()">Tomé otra pieza</button>'; }
   else if(S.ultimo==='corte'){ h+='<button class="big b1" onclick="corte()">Corté otra pieza</button>'; }
   else if(S.ultimo==='empacado'){ h+='<button class="big b1" onclick="empacado()">Registrar otro empacado</button>'; }
-  else if(S.ultimo==='almacen'){ h+='<button class="big b1" onclick="almacen()">Tomé otro material</button>'; }
-  else if(S.ultimo==='entrada'){ h+='<button class="big b1" onclick="entrada()">Registrar otra entrada</button>'; }
+  else if(S.ultimo==='almacen'){ h+='<button class="big b1" onclick="almacen(null,\'Salida\')">Tomé otro material</button>'; }
+  else if(S.ultimo==='entrada'){ h+='<button class="big b1" onclick="entrada()">Registrar otra entrada</button>'+(S.desdeEnc?'<button class="big b2" onclick="vistaEncargado()">🔑 Vista de encargado</button>':''); }
   else if(S.ultimo==='terminado'){ h+='<button class="big b1" onclick="terminados()">Otro movimiento de terminados</button>'; }
   else if(S.ultimo==='problema'){ h+='<button class="big b1" onclick="problema()">Reportar otro problema</button>'; }
   h+='<button class="big b2" onclick="misRegistros()">🧾 Ver mis registros de hoy</button>';
@@ -959,10 +965,15 @@ function guardarProblema(){
 
 /* ---------- entrada de material al almacén (encargado) ---------- */
 function entrada(area){
-  if(!esAdmin()) return menu();
+  S.almMov='Entrada';
   S.area=area||S.area||'Pintura';
+  if(!esAdmin()){
+    pantalla('<button class="back" onclick="menu()">← Inicio</button><h2>🎨 Almacén de pintura y ferretería</h2>'+segMovAlm()+
+      '<div class="card">🔒 Las <b>entradas</b> (material que llegó) solo las registra el encargado.<br><br>Si llegó material, avísale para que lo registre.</div>');
+    return;
+  }
   var items=articulos().map(function(x,i){ return {val:i, titulo:x.nombre, sub:'Hay '+x.existencia+' '+x.unidad, extra:x.codigo, nivel:NIVEL[x.estado], queda:x.existencia+' '+x.unidad}; });
-  var h='<button class="back" onclick="menu()">← Inicio</button><h2>📥 Llegó material</h2><p class="sub">Entrada al almacén (compras)</p><div class="seg">';
+  var h='<button class="back" onclick="'+(S.desdeEnc?'vistaEncargado()':'menu()')+'">← '+(S.desdeEnc?'Vista de encargado':'Inicio')+'</button><h2>🎨 Almacén de pintura y ferretería</h2>'+segMovAlm()+'<p class="sub">🔑 Entrada al almacén (solo encargado)</p><label>¿De qué almacén?</label><div class="seg">';
   ['Pintura','Ferretería'].forEach(function(a){ h+='<button class="'+(S.area===a?'on':'')+'" onclick="entrada(\''+a+'\')">'+(a==='Pintura'?'🎨 ':'🔩 ')+a+'</button>'; });
   h+='</div><label>¿Qué material llegó?</label>'+buscador('art','Escribe: laca, lija, thinner…',items)+
      '<label>¿Cuánto llegó?</label>'+stepper('cant',0)+
@@ -982,10 +993,21 @@ function guardarEntrada(){
   });
 }
 
+/* ---------- vista de encargado (solo administradores) ---------- */
+function vistaEncargado(){
+  if(!esAdmin()) return menu();
+  S.desdeEnc=true;
+  var h='<button class="back" onclick="S.desdeEnc=false;menu()">← Inicio</button><h2>🔑 Vista de encargado</h2><p class="sub">Operaciones que solo pueden hacer los encargados</p>'+
+    '<button class="big b1" onclick="panelEncargado()">📊<span>Panel del encargado<small>Avance, atrasos, quién registró hoy, problemas y anular registros</small></span></button>'+
+    (S.datos.almacen?'<button class="big b2" onclick="entrada()">📥<span>Llegó material<small>Entradas al almacén de pintura y ferretería</small></span></button>':'')+
+    '<button class="big b2" onclick="S.papel=true;S.desdeEnc=false;menu()">📝<span>Pasar hoja de papel<small>Capturar lo que se anotó en papel, a nombre de quien lo hizo y con su fecha</small></span></button>'+
+    '<button class="big b2" onclick="actualizar()">🔄<span>Actualizar datos<small>Bajar lo más nuevo de la hoja</small></span></button>';
+  pantalla(h);
+}
 /* ---------- panel del encargado ---------- */
 function panelEncargado(){
   if(!esAdmin()) return menu();
-  var h='<button class="back" onclick="menu()">← Inicio</button><h2>📊 Panel del encargado</h2>'+barrasAvance();
+  var h='<button class="back" onclick="vistaEncargado()">← Vista de encargado</button><h2>📊 Panel del encargado</h2>'+barrasAvance();
   var atr=(S.datos.lotes||[]).filter(function(l){ return l.estado==='Atrasado'; });
   h+='<div class="card"><b>⏰ Lotes atrasados ('+atr.length+')</b><br>'+(atr.length?atr.map(function(l){ return esc(corto(l.folio))+' <small>(semana '+esc(l.semana)+')</small>'; }).join('<br>'):'<span class="sub">Ninguno 👍</span>')+'</div>';
   var cortar=Object.keys(S.datos.estante||{}).filter(function(k){ return S.datos.estante[k].estado==='CORTAR YA'; });
