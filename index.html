@@ -147,7 +147,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '2.0';
+var VERSION = '2.1';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -376,6 +376,7 @@ function menu(){
      '<button class="big b2" onclick="estante()">📦<span>Tomé piezas del estante<small>Saqué piezas para trabajar</small></span></button>'+
      '<button class="big b2" onclick="corte()">🪚<span>Corté piezas<small>Dejé piezas nuevas en el estante</small></span></button>'+
      (S.datos.almacen?'<button class="big b2" onclick="almacen()">🎨<span>Tomé material del almacén<small>Pintura o ferretería</small></span></button>':'')+
+     (S.datos.terminados?'<button class="big b2" onclick="terminados()">🏷️<span>Almacén de terminados<small>Urnas terminadas guardadas: entran o salen</small></span></button>':'')+
      '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-top:8px">'+
      '<button class="link" onclick="salir()">No soy '+esc(S.nombre)+' (salir)</button>'+
      '<button class="link" onclick="S.papel=true;menu()">Pasar hoja de papel</button>'+
@@ -539,6 +540,121 @@ function guardarEmpacado(){
     r.empacadas+=cant; rp.partes.forEach(function(q){ q.lote.empacadas=(q.lote.empacadas||0)+q.toma; if(q.lote.empacadas>=q.lote.cantidad) q.lote.estado='Terminado'; });
     guardar('datos',S.datos);
     encolar(rec, (r.desc||r.modelo)+' · '+cant+' empacadas'+(rec.semana?' · Semana '+rec.semana:''), 'empacado');
+  });
+}
+
+/* ---------- almacén de urnas terminadas ---------- */
+var TM_MOTIVOS={
+  Entrada:[['Sobrantes de un pedido','Sobrantes de un pedido','Las extras que el cliente no se llevó. Se restan de los extras de ese pedido.'],
+           ['Conteo inicial','Conteo inicial','Las que ya estaban guardadas antes de usar la app.'],
+           ['Otra entrada','Otra','Cualquier otra entrada. Escribe el motivo en el comentario.']],
+  Salida:[['Para un pedido','Para un pedido','Para cubrir dañadas o porque el cliente pidió más. Cuentan como empacadas de ese pedido y de su lote.'],
+          ['Reposición de devolución','Reposición','Para reponer lo que el cliente regresó. Se anotan solas como repuestas en Devoluciones.'],
+          ['Otra salida','Otra','Muestra, venta suelta, etc. Solo se restan del almacén. Escribe el motivo en el comentario.']]
+};
+function tmConPedido(m){ return m==='Sobrantes de un pedido'||m==='Para un pedido'||m==='Reposición de devolución'; }
+function tmTotal(){ return (S.datos.terminados||[]).reduce(function(a,t){ return a+Math.max(0,t.existencia); },0); }
+/* Entrada del almacén para un modelo+color (por su código de catálogo) */
+function tmDe(modelo,color){ return (S.datos.terminados||[]).filter(function(t){ return t.modelo===modelo && t.color===color; })[0]; }
+function tmPedidos(m){
+  if(m==='Para un pedido') return (S.datos.ocs||[]).slice();
+  var vistos={}, r=[];
+  (S.datos.rengTodos||[]).forEach(function(x){ if(vistos[x.oc]) return; if(m==='Sobrantes de un pedido' && x.extras<=0) return; vistos[x.oc]=1; r.push(x.oc); });
+  return r.reverse();
+}
+function tmItems(){
+  var T=S.tm, items=[];
+  var nivel=function(n){ return n>0?['verde','🟢','Hay en almacén']:['rojo','🔴','No hay en almacén']; };
+  if(tmConPedido(T.motivo)){
+    var src = T.motivo==='Para un pedido' ? (S.datos.renglones||[]) : (S.datos.rengTodos||[]);
+    src.filter(function(r){ return r.oc===T.oc; }).forEach(function(r){
+      var t=tmDe(r.modelo,r.color), hay=t?t.existencia:0;
+      var x={val:{t:t, r:r}, titulo:r.desc||(r.modelo+' '+r.color), extra:r.modelo+' '+r.color+' '+r.codigo};
+      if(T.motivo==='Sobrantes de un pedido'){ var ex=(S.datos.rengTodos||[]).filter(function(q){ return q.oc===r.oc && q.codigo===r.codigo; })[0]; x.sub=r.codigo+' · extras de este pedido: '+(ex?ex.extras:0)+' · en almacén: '+hay; }
+      else { x.sub=r.codigo; x.nivel=nivel(hay); x.queda=hay+' en almacén'; }
+      items.push(x);
+    });
+  } else {
+    (S.datos.terminados||[]).forEach(function(t){
+      var x={val:{t:t, r:null}, titulo:t.desc||(t.modelo+' '+t.color), extra:t.modelo+' '+t.color+' '+t.codigo};
+      if(T.mov==='Salida'){ x.sub=t.codigo; x.nivel=nivel(t.existencia); x.queda=t.existencia+' en almacén'; } else x.sub=t.codigo+' · en almacén: '+t.existencia;
+      items.push(x);
+    });
+    if(T.mov==='Salida') items.sort(function(a,b){ return (b.val.t.existencia>0)-(a.val.t.existencia>0); });
+  }
+  return items;
+}
+function terminados(mov,motivo,oc){
+  S.tm=S.tm||{mov:'Salida'};
+  if(mov) { if(mov!==S.tm.mov){ S.tm.motivo=null; S.tm.oc=null; } S.tm.mov=mov; }
+  if(motivo){ if(motivo!==S.tm.motivo) S.tm.oc=null; S.tm.motivo=motivo; }
+  if(!S.tm.motivo) S.tm.motivo=TM_MOTIVOS[S.tm.mov][0][0];
+  var T=S.tm, ped=tmConPedido(T.motivo)?tmPedidos(T.motivo):[];
+  if(oc) T.oc=oc;
+  if(tmConPedido(T.motivo) && ped.indexOf(T.oc)<0) T.oc=ped[0]||null;
+  var h='<button class="back" onclick="menu()">← Inicio</button><h2>🏷️ Almacén de terminados</h2><p class="sub">Urnas terminadas guardadas · hay <b>'+tmTotal()+'</b> en total</p>';
+  h+='<div class="seg"><button class="'+(T.mov==='Entrada'?'on':'')+'" onclick="terminados(\'Entrada\')">⬇️ Entran</button><button class="'+(T.mov==='Salida'?'on':'')+'" onclick="terminados(\'Salida\')">⬆️ Salen</button></div>';
+  h+='<label>¿Por qué '+(T.mov==='Entrada'?'entran':'salen')+'?</label><div class="seg">';
+  TM_MOTIVOS[T.mov].forEach(function(m){ h+='<button class="'+(T.motivo===m[0]?'on':'')+'" onclick="terminados(null,\''+m[0]+'\')">'+esc(m[1])+'</button>'; });
+  h+='</div><div class="sub" style="margin-top:6px">'+esc(TM_MOTIVOS[T.mov].filter(function(m){ return m[0]===T.motivo; })[0][2])+'</div>';
+  if(tmConPedido(T.motivo)){
+    if(!ped.length){
+      h+='<div class="warn">'+(T.motivo==='Sobrantes de un pedido'?'Ningún pedido tiene extras sin entregar.':T.motivo==='Para un pedido'?'No hay pedidos activos.':'No hay pedidos registrados.')+'</div>';
+      pantalla(h); return;
+    }
+    h+='<label>'+(T.motivo==='Sobrantes de un pedido'?'¿De qué pedido sobraron?':'¿Para qué pedido?')+'</label><select id="tmoc" onchange="terminados(null,null,this.value)">';
+    ped.forEach(function(o){ h+='<option'+(o===T.oc?' selected':'')+'>'+esc(o)+'</option>'; });
+    h+='</select>';
+  }
+  h+='<label>¿Qué modelo?</label>'+buscador('tmm','Escribe: casita, clásica, chocolate…',tmItems())+
+     '<label>¿Cuántas urnas?</label>'+stepper('cant',0)+
+     '<div id="pista" class="pista"></div>'+
+     '<label>Comentario (opcional)</label><input type="text" id="com" maxlength="200">';
+  if(S.papel) h+=quienHtml()+'<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
+  h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarTerminado()">✔ Registrar</button></div>';
+  pantalla(h);
+  S.pick.tmm.alElegir=function(){ $('cant').value=0; tmPista(); };
+  S.alCambiar=tmPista; $('cant').oninput=tmPista;
+}
+function tmPista(){
+  var x=elegido('tmm'), el=$('pista'); if(!el) return;
+  if(!x || S.tm.motivo!=='Para un pedido'){ el.innerHTML=''; return; }
+  var cant=parseInt($('cant').value,10)||0, r=x.val.r; if(!r){ el.innerHTML=''; return; }
+  if(cant<=0){ var r0=repartir(r,1e9).partes[0]; el.innerHTML = r0 ? '<div class="sub">Contarán como empacadas del lote <b>'+esc(corto(r0.lote.folio))+'</b> (Semana '+esc(r0.lote.semana)+').</div>' : '<div class="sub">Los lotes de este modelo ya están completos: contarán como empacadas extra del pedido.</div>'; return; }
+  var rp=repartir(r,cant), p=rp.partes;
+  var t=p.map(function(q){ return '<b>'+q.toma+'</b> al lote <b>'+esc(corto(q.lote.folio))+'</b>'+(q.toma===q.falta?' (lo completa)':''); }).join(', ');
+  el.innerHTML='<div class="ok-lote">'+(t?'Cuentan como empacadas: '+t+'.':'')+(rp.sobra>0?(t?' ':'')+'<b>'+rp.sobra+'</b> cuentan como empacadas extra del pedido (los lotes ya están completos).':'')+'</div>';
+}
+function guardarTerminado(){
+  var T=S.tm, x=elegido('tmm'), cant=parseInt($('cant').value,10)||0;
+  if(!x){ $('err').textContent='Elige el modelo.'; return; }
+  if(cant<=0){ $('err').textContent='Escribe cuántas urnas (más de 0).'; return; }
+  var t=x.val.t, r=x.val.r, hay=t?t.existencia:0;
+  var fecha=fechaRegistro(), com=$('com').value.trim();
+  var rec={ id:uid(), tipo:'terminado', nombre:S.nombre, ts:fecha, mov:T.mov, motivo:T.motivo, cantidad:cant, comentario:com,
+            codigo:t?t.codigo:(r?r.codigo:''), modelo:t?t.modelo:(r?r.modelo:''), color:t?t.color:(r?r.color:''), desc:t?t.desc:(r?r.desc:'') };
+  var avisos=[], lineas=[['Movimiento',(T.mov==='Entrada'?'Entran al almacén':'Salen del almacén')],['Motivo',T.motivo],['Modelo',rec.desc||rec.codigo],['Urnas',cant]];
+  var rp=null;
+  if(tmConPedido(T.motivo)){
+    rec.oc=T.oc; rec.codigoOC=r?r.codigo:rec.codigo; rec.descOC=r?r.desc:rec.desc; lineas.splice(2,0,['Pedido',T.oc]);
+  }
+  if(T.motivo==='Para un pedido' && r){
+    rp=repartir(r,cant); rec.lote=rp.partes.map(function(q){ return q.lote.folio; }).join(', '); rec.semana=semanaHoy(r.oc,fecha);
+    if(rec.lote) lineas.push(['Cuentan para el lote',rp.partes.map(function(q){ return corto(q.lote.folio); }).join(', ')]);
+    if(rp.sobra>0) avisos.push(rp.sobra+' van como empacadas extra del pedido (sus lotes ya están completos).');
+  }
+  if(T.mov==='Salida' && cant>hay) avisos.push('En el sistema solo hay '+hay+' en el almacén.');
+  if(T.motivo==='Sobrantes de un pedido'){
+    var ex=(S.datos.rengTodos||[]).filter(function(q){ return q.oc===T.oc && r && q.codigo===r.codigo; })[0];
+    if(ex && cant>ex.extras) avisos.push('Ese pedido solo tiene '+ex.extras+' extras sin entregar de este modelo.');
+  }
+  if(!rec.codigo){ $('err').textContent='Este modelo no está en el Catálogo.'; return; }
+  preguntar(lineas, avisos, function(){
+    if(t){ t.existencia += (T.mov==='Entrada'?cant:-cant); }
+    if(rp){ r.empacadas+=cant; rp.partes.forEach(function(q){ q.lote.empacadas=(q.lote.empacadas||0)+q.toma; if(q.lote.empacadas>=q.lote.cantidad) q.lote.estado='Terminado'; }); }
+    if(T.motivo==='Sobrantes de un pedido'){ (S.datos.rengTodos||[]).forEach(function(q){ if(q.oc===T.oc && r && q.codigo===r.codigo) q.extras-=cant; }); }
+    guardar('datos',S.datos);
+    encolar(rec, 'Terminados · '+(T.mov==='Entrada'?'entran ':'salen ')+cant+' · '+(rec.desc||rec.codigo)+(rec.oc?' · '+rec.oc:''), 'terminado');
   });
 }
 
@@ -764,6 +880,7 @@ function confirmar(enviado,resumen){
   else if(S.ultimo==='empacado'){ h+='<button class="big b1" onclick="empacado()">Registrar otro empacado</button>'; }
   else if(S.ultimo==='almacen'){ h+='<button class="big b1" onclick="almacen()">Tomé otro material</button>'; }
   else if(S.ultimo==='entrada'){ h+='<button class="big b1" onclick="entrada()">Registrar otra entrada</button>'; }
+  else if(S.ultimo==='terminado'){ h+='<button class="big b1" onclick="terminados()">Otro movimiento de terminados</button>'; }
   else if(S.ultimo==='problema'){ h+='<button class="big b1" onclick="problema()">Reportar otro problema</button>'; }
   h+='<button class="big b2" onclick="misRegistros()">🧾 Ver mis registros de hoy</button>';
   h+='<button class="big b2" onclick="menu()">Inicio</button>';
