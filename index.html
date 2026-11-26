@@ -149,7 +149,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '2.9';
+var VERSION = '3.0';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -700,8 +700,9 @@ function bloque(l,pieza,area){
 function itemsArea(l,area){
   return PIEZAS.map(function(p){ var b=bloque(l,p[0],area); return b?{pieza:p[0], nom:p[1], b:b}:null; }).filter(Boolean);
 }
-function detalle(i,pieza){
-  if(pieza || !S.datos.areasFases) return detalleFase(i,pieza);
+/* Registro por fase (el registro rápido por área quedó desactivado a petición del dueño) */
+function detalle(i,pieza){ return detalleFase(i,pieza); }
+function detalleRapido(i,pieza){
   S.lote=S.datos.lotes[i]; var l=S.lote;
   var areas=miArea()!=='Todas'?[miArea()]:AREAS;
   var ops=areas.map(function(a){ return {area:a, items:itemsArea(l,a)}; }).filter(function(o){ return o.items.length; });
@@ -733,7 +734,7 @@ function detalleFase(i,pieza){
   if(!piezasOk.length) piezasOk=PIEZAS.filter(function(p){ return !(p[0]==='Techo' && !l.techo); });
   S.pieza=pieza||S.pieza||piezasOk[0][0];
   if(!piezasOk.some(function(p){ return p[0]===S.pieza; })) S.pieza=piezasOk[0][0];
-  var h='<button class="back" onclick="'+(S.datos.areasFases?'detalle('+i+')':'lotes()')+'">← '+(S.datos.areasFases?'Volver':'Lotes')+'</button><h2>'+esc(corto(l.folio))+'</h2><p class="sub">'+l.cantidad+' piezas · pedido '+esc(l.oc)+'</p>';
+  var h='<button class="back" onclick="lotes()">← Lotes</button><h2>'+esc(corto(l.folio))+'</h2><p class="sub">'+l.cantidad+' piezas · pedido '+esc(l.oc)+'</p>';
   h+='<label>¿Qué pieza?</label><div class="seg">';
   piezasOk.forEach(function(p){
     h+='<button class="'+(S.pieza===p[0]?'on':'')+'" onclick="detalleFase('+i+',\''+p[0]+'\')">'+p[1]+'</button>';
@@ -934,7 +935,7 @@ function confirmar(enviado,resumen){
         '<p class="sub">'+esc(resumen)+'</p>'+
         (enviado?'':'<div class="warn">No hay internet. Se va a enviar solo cuando regrese la señal. <b>No lo vuelvas a capturar.</b></div>')+'</div>';
   var i=S.lote?S.datos.lotes.map(function(x){return x.folio;}).indexOf(S.lote.folio):-1;
-  if(S.ultimo==='avance' && i>=0){ h+='<button class="big b1" onclick="detalle('+i+')">Volver a este lote</button><button class="big b2" onclick="lotes()">Otro lote</button>'; }
+  if(S.ultimo==='avance' && i>=0){ h+='<button class="big b1" onclick="detalle('+i+')">Registrar otra fase de este lote</button><button class="big b2" onclick="lotes()">Otro lote</button>'; }
   else if(S.ultimo==='estante'){ h+='<button class="big b1" onclick="estante()">Tomé otra pieza</button>'; }
   else if(S.ultimo==='corte'){ h+='<button class="big b1" onclick="corte()">Corté otra pieza</button>'; }
   else if(S.ultimo==='empacado'){ h+='<button class="big b1" onclick="empacado()">Registrar otro empacado</button>'; }
