@@ -137,6 +137,15 @@
   .oscuro .lotebox{background:#1e3a5f}
   .oscuro .fasebox{background:#14301a;border-color:#4ade80}.oscuro .fasebox span{color:#86efac}.oscuro .fasebox b{color:#dcfce7}
   .oscuro .todo{background:#1f2937;color:#93c5fd;border-color:#93c5fd}
+  .oc.semana.lista{background:#e5f4e4;color:#1f5f1f;border-left-color:#38761d;font-size:17px}
+  .oc.semana.lista span{color:#3f6b3f}
+  .card.sem-ok{background:#e5f4e4;border-color:#b7d7b0}.oscuro .card.sem-ok{background:#14301a}
+  details.hechas{margin-top:22px;border-top:2px dashed #b7d7b0;padding-top:10px}
+  details.hechas summary{font-weight:bold;color:#38761d;font-size:16px;padding:8px 2px;cursor:pointer}
+  details.hechas summary small{font-weight:normal;color:#6b7280;margin-left:6px}
+  details.hechas .lote{opacity:.75}
+  .oscuro .oc.semana.lista{background:#14301a;color:#86efac;border-left-color:#4ade80}.oscuro .oc.semana.lista span{color:#bbf7d0}
+  .oscuro details.hechas{border-top-color:#2f5a35}.oscuro details.hechas summary{color:#86efac}
   .lote .tag{display:inline-block;margin:0 0 0 8px;vertical-align:middle}
   .oc.semana span{font-weight:normal;color:#4b5563;font-size:14px;display:block;margin-top:2px;letter-spacing:0}
   .oscuro .oc.semana{border-left-color:#93c5fd}
@@ -168,7 +177,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '3.5';
+var VERSION = '3.6';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -479,18 +488,33 @@ function filtrarLotes(f){
     var k=l.oc+'|'+l.semana; if(!grupos[k]){ grupos[k]=[]; orden.push(k); } grupos[k].push(i);
   });
   orden.sort(function(a,b){ var A=a.split('|'),B=b.split('|'); return A[0]===B[0] ? (Number(A[1])||0)-(Number(B[1])||0) : (A[0]<B[0]?-1:1); });
-  var ocAnt=null;
-  orden.forEach(function(k){
-    var p=k.split('|'), ids=grupos[k], tot=0, emp=0;
+  /* Una semana está completa cuando todos sus lotes ya están empacados (Terminado):
+     esas se van al final, en verde y plegadas, para que no estorben */
+  var semanaLista=function(k){ var p=k.split('|');
+    var ls=S.datos.lotes.filter(function(l){ return l.oc===p[0] && String(l.semana)===p[1]; });
+    return ls.length>0 && ls.every(function(l){ return l.estado==='Terminado' || (l.empacadas||0)>=l.cantidad; }); };
+  var activas=orden.filter(function(k){ return !semanaLista(k); }), listas=orden.filter(semanaLista);
+  var pintarSemana=function(k, verde){
+    var p=k.split('|'), ids=grupos[k], tot=0, emp=0, r='';
     ids.forEach(function(i){ tot+=S.datos.lotes[i].cantidad; emp+=Math.min(S.datos.lotes[i].empacadas||0,S.datos.lotes[i].cantidad); });
-    if(p[0]!==ocAnt){ h+='<div class="oc pedido">PEDIDO '+esc(p[0])+'</div>'; ocAnt=p[0]; }
-    h+='<div class="oc semana">SEMANA '+esc(p[1])+'<span>'+tot+' urnas · empacadas '+emp+'</span></div>';
+    r+='<div class="oc semana'+(verde?' lista':'')+'">'+(verde?'✔ ':'')+'SEMANA '+esc(p[1])+(verde?' · TERMINADA':'')+'<span>'+(verde?'Pedido '+esc(p[0])+' · ':'')+tot+' urnas · empacadas '+emp+'</span></div>';
     ids.forEach(function(i){
       var l=S.datos.lotes[i];
-      h+='<button class="lote" onclick="detalle('+i+')"><b>'+esc(corto(l.folio))+'</b>'+tagEstado(l.estado)+
+      r+='<button class="lote" onclick="detalle('+i+')"><b>'+esc(corto(l.folio))+'</b>'+tagEstado(l.estado)+
          '<span>'+l.cantidad+' piezas</span></button>';
     });
+    return r;
+  };
+  var ocAnt=null;
+  activas.forEach(function(k){
+    var oc=k.split('|')[0];
+    if(oc!==ocAnt){ h+='<div class="oc pedido">PEDIDO '+esc(oc)+'</div>'; ocAnt=oc; }
+    h+=pintarSemana(k,false);
   });
+  if(listas.length){
+    if(!activas.length) h+='<div class="card">🎉 Todas las semanas de estos lotes ya están terminadas.</div>';
+    h+='<details class="hechas"><summary>✔ Semanas terminadas ('+listas.length+') <small>toca para ver</small></summary>'+listas.map(function(k){ return pintarSemana(k,true); }).join('')+'</details>';
+  }
   $('listaLotes').innerHTML = h || (miArea()!=='Todas' && !S.verTodo ? '<div class="card">🎉 No hay lotes pendientes para <b>'+miArea()+'</b>. Toca <b>Todos</b> para ver el resto.</div>' : '<div class="card">No hay lotes con ese nombre. Revisa que el pedido esté <b>Activo</b> o toca "Actualizar datos".</div>');
 }
 
@@ -1216,9 +1240,10 @@ function progresoAreas(){
     var a=avanceGrupo(ls), atr=ls.filter(function(l){ return l.estado==='Atrasado'; }).length;
     h+='<div class="card avance"><div class="av-tit">Pedido <b>'+esc(oc)+'</b> · '+a.urnas+' urnas · '+ls.length+' lotes'+(atr?' · <span style="color:#b00020">'+atr+' atrasado(s)</span>':'')+'</div>'+barras(a)+'</div>';
     var sems={}; ls.forEach(function(l){ (sems[l.semana]=sems[l.semana]||[]).push(l); });
-    Object.keys(sems).sort(function(x,y){ return (Number(x)||0)-(Number(y)||0); }).forEach(function(sm){
-      var g=sems[sm], ag=avanceGrupo(g);
-      h+='<div class="card"><b>Semana '+esc(sm)+'</b> <span class="sub">· '+ag.urnas+' urnas</span>'+barras(ag,true)+
+    var lista=function(sm){ return sems[sm].every(function(l){ return l.estado==='Terminado' || (l.empacadas||0)>=l.cantidad; }); };
+    Object.keys(sems).sort(function(x,y){ return (lista(x)-lista(y)) || ((Number(x)||0)-(Number(y)||0)); }).forEach(function(sm){
+      var g=sems[sm], ag=avanceGrupo(g), ok=lista(sm);
+      h+='<div class="card'+(ok?' sem-ok':'')+'"><b>'+(ok?'✔ ':'')+'Semana '+esc(sm)+(ok?' · terminada':'')+'</b> <span class="sub">· '+ag.urnas+' urnas</span>'+barras(ag,true)+
          '<details style="margin-top:6px"><summary class="sub">Ver cada lote ('+g.length+')</summary>'+
          g.map(function(l){ var al=avanceLote(l), e=Math.round(Math.min(l.empacadas||0,l.cantidad)/(l.cantidad||1)*100);
            return '<div style="margin-top:8px"><b style="font-size:13px">'+esc(corto(l.folio))+'</b> '+tagEstado(l.estado)+'<div class="mini" style="font-size:12px">'+
