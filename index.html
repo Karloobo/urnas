@@ -18,11 +18,11 @@
   /* Colores: azul = navegar y elegir; naranja = registrar/confirmar; gris y blanco = fondo.
      Verde solo para "terminado/enviado" y rojo solo para "atrasado/error". */
   :root{--bg:#EEF2F6;--card:#FFFFFF;--card2:#F4F6F9;--line:#CDD6E0;--tx:#16263A;--mu:#566575;
-    --y:#1F5FA8;--yx:#1F5FA8;--yt:#FFFFFF;--azS:#E5EEF9;--nar:#D45F10;--narS:#FFF1E4;
+    --y:#1F5FA8;--yx:#1F5FA8;--yt:#FFFFFF;--azS:#E5EEF9;--nar:#B9520B;--narTx:#B9520B;--narS:#FFF1E4;
     --ok:#1D7748;--okbg:#E1F2E8;--red:#BE3326;--redbg:#FBE5E2;--wbg:#FFF1E4;--wtx:#7A3608;--vacio:#E0E6ED;--amar:#E9B800;--amartx:#7A5D00;
     --a-Corte:#7C8B9D;--a-Lijado:#E8892B;--a-Pintura:#2F74C0;--a-Empacado:#15304F}
   body.oscuro{--bg:#0F1A27;--card:#182637;--card2:#1F3045;--line:#2E415A;--tx:#EEF2F6;--mu:#A2B2C3;
-    --y:#3A7DD6;--yx:#7DB1F0;--yt:#FFFFFF;--azS:#1C3554;--nar:#E8701F;--narS:#3A2414;
+    --y:#2F6FC6;--yx:#7DB1F0;--yt:#FFFFFF;--azS:#1C3554;--nar:#B9520B;--narTx:#F2A15C;--narS:#3A2414;
     --ok:#5FCF8F;--okbg:#14301F;--red:#FF7B6E;--redbg:#3B1A17;--wbg:#3A2414;--wtx:#FFC28F;--vacio:#2E415A;--amar:#F5C518;--amartx:#F5C518;
     --a-Corte:#A6B4C4;--a-Lijado:#F2913D;--a-Pintura:#62A0EC;--a-Empacado:#DCE5EF}
   *{box-sizing:border-box}
@@ -163,6 +163,7 @@
   .lote .mini em{font-style:normal;margin-right:8px}
   .oc.pedido{font-size:14px;color:var(--mu);margin-top:18px}
   .lotebox{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--y);border-radius:12px;padding:12px 14px;margin:4px 0 6px}
+  .lotebox h2.lb-nom{margin:0;letter-spacing:.2px}
   .lotebox .lb-nom{font-size:22px;font-weight:700;line-height:1.25}
   .lotebox .lb-sem{font-size:15px;color:var(--mu);margin-top:4px}
   .fasebox{background:var(--narS);color:var(--tx);border:2px solid var(--nar);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:14px}
@@ -204,13 +205,13 @@
   input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
   #tp{display:grid;grid-template-columns:1fr 1fr}
   .llegada{background:var(--narS);border:2px solid var(--nar);border-radius:14px;padding:14px 14px 8px;margin-bottom:14px}
-  .lleg-cab{display:flex;align-items:center;gap:12px;color:var(--nar);margin-bottom:6px}
+  .lleg-cab{display:flex;align-items:center;gap:12px;color:var(--narTx);margin-bottom:6px}
   .lleg-cab b{display:block;font-size:19px;color:var(--tx);line-height:1.25}
   .lleg-cab span{display:block;font-size:15px;color:var(--wtx);font-weight:700}
   .lleg-fila{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
   .lleg-info{flex:1;min-width:0;display:flex;align-items:center;gap:12px;text-align:left;padding:4px;border-radius:8px;min-height:52px}
   .lleg-ok{flex:none;display:flex;align-items:center;gap:6px;min-height:48px;padding:8px 14px;background:var(--nar);color:#fff;font-weight:700;font-size:16px}
-  .lleg-n{flex:none;min-width:52px;font-size:28px;font-weight:700;color:var(--nar);line-height:1}
+  .lleg-n{flex:none;min-width:52px;font-size:28px;font-weight:700;color:var(--narTx);line-height:1}
   .lleg-t{flex:1;line-height:1.3}.lleg-t b{display:block;font-size:16px}.lleg-t small{display:block;font-size:14px;color:var(--mu)}
   .lleg-info svg{color:var(--mu)}.lleg-ok svg{color:#fff}
   .t-lleg{background:var(--narS);color:var(--wtx);border:1px solid var(--nar);margin:0 0 10px}
@@ -225,6 +226,8 @@
   .he-tot{flex:none;font-weight:700;white-space:nowrap}
   .he-suma{border-bottom:0}.he-suma .he-mod{font-weight:400;color:var(--mu)}
   input[type=date]{width:100%;font:inherit;color:var(--tx);padding:14px;border:2px solid var(--line);border-radius:10px;background:var(--card);min-height:54px}
+  .aviso-corto{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#15304F;color:#fff;padding:12px 18px;border-radius:12px;font-weight:700;font-size:15px;z-index:60;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;text-align:center}
+  .aviso-corto.ver{opacity:1}
   .hide{display:none}
   .ver{font-size:12px;color:var(--mu);text-align:center;margin-top:14px}
 </style>
@@ -232,7 +235,7 @@
 <body>
 <header>
   <h1 onclick="toqueTitulo()" style="-webkit-user-select:none;user-select:none;cursor:default">URNAS</h1>
-  <span id="estado" class="pill">Conectando…</span>
+  <span id="estado" class="pill" role="status" aria-live="polite">Conectando…</span>
 </header>
 <main id="app"><p>Cargando…</p></main>
 
@@ -240,7 +243,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.2';
+var VERSION = '4.3';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -319,7 +322,34 @@ function histAgregar(rec,resumen){
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 function uid(){ return Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9); }
 function $(id){ return document.getElementById(id); }
-function pantalla(html){ S.alCambiar=null; $('app').innerHTML=html; window.scrollTo(0,0); }
+function pantalla(html){ S.alCambiar=null; $('app').innerHTML=html; window.scrollTo(0,0); accesible($('app')); armarAtras(); }
+/* Liga cada título (label) con su campo y marca los mensajes de error como avisos */
+function accesible(raiz){
+  [].forEach.call(raiz.querySelectorAll('label'), function(lb){
+    if(lb.htmlFor || lb.querySelector('input,select,textarea')) return;
+    var sig=lb.nextElementSibling, campo=null;
+    if(sig){ campo=/^(INPUT|SELECT|TEXTAREA)$/.test(sig.tagName)?sig:sig.querySelector('input:not([type=file]),select,textarea'); }
+    if(campo && campo.id) lb.htmlFor=campo.id;
+  });
+  [].forEach.call(raiz.querySelectorAll('.err'), function(e){ e.setAttribute('role','alert'); });
+}
+/* ---------- botón Atrás del celular: regresa una pantalla en lugar de cerrar la app ---------- */
+var ATRAS={ salir:false };
+function armarAtras(){ try{ if(!(history.state && history.state.urnas)) history.pushState({urnas:1},''); }catch(e){} }
+function avisoCorto(t){
+  var a=$('avisoCorto'); if(!a){ a=document.createElement('div'); a.id='avisoCorto'; a.className='aviso-corto'; a.setAttribute('role','status'); document.body.appendChild(a); }
+  a.textContent=t; a.className='aviso-corto ver'; clearTimeout(a._t); a._t=setTimeout(function(){ a.className='aviso-corto'; },2500);
+}
+window.addEventListener('popstate', function(){
+  var m=$('modal');
+  if(m){ m.parentNode.removeChild(m); armarAtras(); return; }               /* cierra la ventana de confirmación */
+  var b=document.querySelector('#app .back');
+  if(b){ b.click(); armarAtras(); return; }                                  /* igual que tocar "‹ Regresar" */
+  if(document.querySelector('#app .hero') || document.querySelector('#app .name') || !S.nombre){
+    avisoCorto('Toca Atrás otra vez para salir de la app'); return;          /* en el inicio: la siguiente vez sí sale */
+  }
+  if(S.datos && S.nombre) menu(); else armarAtras();                         /* pantallas sin botón Regresar: al inicio */
+});
 function corto(f){ return String(f).replace(/\s*\([^)]*\)\s*$/,''); }
 function tagEstado(e){ var k=String(e||'').slice(0,3); return '<span class="tag t-'+esc(k)+'">'+esc(e||'')+'</span>'; }
 /* Íconos (líneas simples; heredan el color del texto) */
@@ -385,7 +415,7 @@ function cargarDatos(cb){
   if(cache && !S.datos){ S.datos=cache; }
   if(!hayScript()){ enLinea=false; pintarEstado(); cb&&cb(); return; }
   google.script.run
-    .withSuccessHandler(function(d){ S.datos=d; guardar('datos',d); enLinea=true; aplicarPendientesALotes(); pintarEstado(); cb&&cb(); })
+    .withSuccessHandler(function(d){ S.datos=d; guardar('datos',d); enLinea=true; ultimaCarga=Date.now(); aplicarPendientesALotes(); pintarEstado(); cb&&cb(); })
     .withFailureHandler(function(err){
       enLinea=false; pintarEstado();
       if(!S.datos){ var m=String(err&&err.message||err); document.getElementById('app').innerHTML='<div class="card">'+(/SIN_RED/.test(m)&&!navigator.onLine?'<b>Abre la app una vez con internet</b> para que se descarguen los lotes. Después ya funciona sin señal.<br><br>Mientras tanto usa la <b>hoja de registro en papel</b>.':'<b style="color:var(--red)">No pude leer la hoja.</b><br><br>'+esc(m)+'<br><br><small>Mándale una foto de esto a Karlo.</small>')+'<br><br><button class="big b1" onclick="actualizar()">Reintentar</button></div>'; return; }
@@ -413,6 +443,20 @@ function enviarPendientes(){
     .registrar(rec);
 }
 setInterval(function(){ if(cola().length) enviarPendientes(); }, 30000);
+/* Datos al día: al volver a la app (si pasó más de 1 minuto) y cada 5 minutos con la app abierta.
+   Solo se vuelve a dibujar la pantalla si es el inicio o la lista de lotes, para no borrar lo que alguien está capturando. */
+var ultimaCarga=Date.now();
+function refrescarSolo(){
+  if(!hayScript() || !S.datos || !S.nombre || document.hidden) return;
+  ultimaCarga=Date.now();
+  cargarDatos(function(){
+    if($('modal')) return;
+    if(document.querySelector('#app .hero')) menu();
+    else if($('listaLotes') && $('busca')) filtrarLotes($('busca').value);
+  });
+}
+document.addEventListener('visibilitychange', function(){ if(!document.hidden && Date.now()-ultimaCarga>60000) refrescarSolo(); });
+setInterval(function(){ if(Date.now()-ultimaCarga>=300000) refrescarSolo(); }, 60000);
 window.addEventListener('online',function(){ enLinea=true; pintarEstado(); enviarPendientes(); cargarDatos(); });
 window.addEventListener('offline',function(){ enLinea=false; pintarEstado(); });
 
@@ -579,7 +623,7 @@ function recibi(k, otra){
     (otra?'<label>Las que llegaron de verdad</label>'+stepper('cantR',x.conf,true)+'<label>Comentario (opcional)</label><input type="text" id="comR" maxlength="200" placeholder="Ej. 3 venían golpeadas">'+
           '<p class="sub" style="margin-top:10px">Si no coincide, le llega un aviso al encargado.</p>':'')+
     '<div class="btnrow"><button class="b2" id="mNo">'+(otra?'Cancelar':'Llegó otra cantidad')+'</button><button class="b3" id="mSi">'+ic('check',22,0,3)+(otra?'Confirmar':'Sí, llegaron '+x.conf)+'</button></div></div>';
-  document.body.appendChild(d);
+  document.body.appendChild(d); prepModal(d);
   var cerrar=function(){ d.parentNode&&d.parentNode.removeChild(d); };
   $('mNo').onclick=function(){ cerrar(); if(!otra) recibi(k,true); };
   $('mSi').onclick=function(){
@@ -661,7 +705,7 @@ function lotes(filtro){
   var h='<button class="back" onclick="menu()">'+ic('back',18,0,3)+'Inicio</button>'+
         '<h2>Elige tu lote</h2>'+
         (miArea()!=='Todas'?'<div class="seg"><button class="'+(S.verTodo?'':'on')+'" onclick="S.verTodo=false;lotes()">Míos · '+miArea()+'</button><button class="'+(S.verTodo?'on':'')+'" onclick="S.verTodo=true;lotes()">Todos</button></div>':'')+
-        '<input type="text" id="busca" placeholder="Busca el nombre de la tarjeta" value="'+esc(filtro)+'" oninput="filtrarLotes(this.value)">'+
+        '<input type="text" id="busca" aria-label="Buscar lote" placeholder="Busca el nombre de la tarjeta" value="'+esc(filtro)+'" oninput="filtrarLotes(this.value)">'+
         '<div id="listaLotes" style="margin-top:4px"></div>'+
         (S.datos.renglones?'<div class="fijo"><div class="btnrow"><button class="b2" onclick="empacado()">'+ic('pkg')+'Empacado</button></div></div>':'');
   pantalla(h); filtrarLotes(filtro);
@@ -989,7 +1033,7 @@ function detalleFase(i,pieza){
   S.pieza=pieza||S.pieza||piezasOk[0][0];
   if(!piezasOk.some(function(p){ return p[0]===S.pieza; })) S.pieza=piezasOk[0][0];
   var h='<button class="back" onclick="lotes()">'+ic('back',18,0,3)+'Lotes</button>'+
-    '<div class="lotebox"><div class="lb-nom">'+esc(corto(l.folio))+'</div><div class="lb-sem">Semana '+esc(l.semana)+' · '+l.cantidad+' piezas · '+esc(l.oc)+'</div></div>';
+    '<div class="lotebox"><h2 class="lb-nom">'+esc(corto(l.folio))+'</h2><div class="lb-sem">Semana '+esc(l.semana)+' · '+l.cantidad+' piezas · '+esc(l.oc)+'</div></div>';
   h+='<label class="paso"><i>1</i>¿Qué pieza?</label><div class="seg piezas"'+(piezasOk.length===3?' style="grid-template-columns:1fr 1fr 1fr"':'')+'>';
   piezasOk.forEach(function(p){
     var base=fasesBase(l,p[0]), a=l.av[p[0]], fin=base.length && a===base[base.length-1];
@@ -1019,7 +1063,7 @@ function detalleFase(i,pieza){
        bloq?'Todavía no puedes registrar. Primero se tiene que registrar <b>'+esc(nomFase(bloq))+'</b>'+(areaDeFase(S.pieza,bloq)&&areaDeFase(S.pieza,bloq)!==areaFases()?' ('+esc(areaDeFase(S.pieza,bloq))+')':'')+'.':
        'No hay piezas pendientes de tu área en esta pieza.')+'</div>';
   }
-  h+='<select id="fase" class="'+(yaTodo?'':'hide')+'" onchange="faseCambio()">';
+  h+='<select id="fase" aria-label="Fase que terminaste" class="'+(yaTodo?'':'hide')+'" onchange="faseCambio()">';
   lista.forEach(function(f){ var d=disponible(l,S.pieza,f);
     h+='<option value="'+esc(f)+'"'+(f===(sug||(yaTodo?act:null))?' selected':'')+(d>0?'':' disabled')+'>'+esc(nomFase(f))+(isFinite(d)?(d>0?' — hasta '+d:' — bloqueada: '+(hecho(l,S.pieza,f)>=l.cantidad?'ya completa':'falta '+nomFase(previa(l,S.pieza,f)||''))):'')+'</option>'; });
   h+='</select>';
@@ -1057,8 +1101,8 @@ function avisoCant(){
   var el=$('cantAviso'); if(!el) return; var c=parseInt($('cant').value,10)||0, f=$('fase').value, m=maxFase(f), pv=previa(S.lote,S.pieza,f);
   el.innerHTML = c>m ? '<div class="warn err">Solo puedes registrar hasta '+m+(isFinite(disponible(S.lote,S.pieza,f))?(pv?': son las que ya terminaron '+esc(nomFase(pv))+'.':': es el tamaño del lote.'):'.')+'</div>' : '';
 }
-function stepper(id,v,grande){
-  return '<div class="step'+(grande?' grande':'')+'"><button aria-label="Menos" onclick="paso(\''+id+'\',-1)">'+ic('minus',28)+'</button><input type="number" inputmode="decimal" step="any" id="'+id+'" value="'+v+'" min="0"><button aria-label="Más" onclick="paso(\''+id+'\',1)">'+ic('plus',28)+'</button></div>';
+function stepper(id,v,grande,decimal){
+  return '<div class="step'+(grande?' grande':'')+'"><button aria-label="Menos" onclick="paso(\''+id+'\',-1)">'+ic('minus',28)+'</button><input type="number" '+(decimal?'inputmode="decimal" step="any"':'inputmode="numeric" pattern="[0-9]*" step="1"')+' id="'+id+'" value="'+v+'" min="0"><button aria-label="Más" onclick="paso(\''+id+'\',1)">'+ic('plus',28)+'</button></div>';
 }
 function paso(id,d){ var e=$(id); e.value=Math.max(0,Math.round(((parseFloat(e.value)||0)+d)*100)/100); if(S.alCambiar) S.alCambiar(); }
 function fechaRegistro(){
@@ -1207,7 +1251,7 @@ function almacen(area,mov){
   ['Pintura','Ferretería'].forEach(function(a){ h+='<button class="'+(S.area===a?'on':'')+'" onclick="almacen(\''+a+'\')">'+(a==='Pintura'?ic('brocha',22):ic('llave',22))+a+'</button>'; });
   h+='</div><label>¿Qué material?</label>'+buscador('art','Escribe: laca, lija, thinner…',items)+
      '<div class="sub" style="margin-top:6px">'+dot('verde')+' hay suficiente · '+dot('amarillo')+' ya casi se acaba · '+dot('rojo')+' queda poco</div>'+
-     '<label>¿Cuánto tomaste?</label>'+stepper('cant',0)+
+     '<label>¿Cuánto tomaste?</label>'+stepper('cant',0,false,true)+
      '<label>¿Para qué? (opcional)</label><input type="text" id="uso" maxlength="120" placeholder="Ej. pedido OC1655, casitas chocolate">';
   if(S.papel) h+=quienHtml()+'<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
   h+='<div class="fijo"><div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarAlmacen()">'+ic('check',24,0,3)+'Registrar</button></div></div>';
@@ -1228,6 +1272,14 @@ function guardarAlmacen(){
 }
 
 /* Pregunta "¿Estás seguro?" antes de guardar cualquier cantidad capturada a mano */
+/* Ventana de confirmación: se anuncia como diálogo, el foco va al botón principal, Esc = Corregir */
+function prepModal(d){
+  var c=d.querySelector('.caja'), t=c&&c.querySelector('h3');
+  if(c){ c.setAttribute('role','dialog'); c.setAttribute('aria-modal','true'); if(t){ t.id='modalTit'; c.setAttribute('aria-labelledby','modalTit'); } }
+  accesible(d);
+  d.addEventListener('keydown',function(e){ if(e.key==='Escape' && $('mNo')) $('mNo').click(); });
+  var b0=d.querySelector('#mSi'); if(b0 && b0.focus) b0.focus();
+}
 function preguntar(lineas, avisos, ok, op){
   op=op||{};
   var d=document.createElement('div'); d.className='modal'; d.id='modal';
@@ -1235,7 +1287,7 @@ function preguntar(lineas, avisos, ok, op){
     lineas.map(function(x){ return '<div class="linea"><span>'+esc(x[0])+'</span><b>'+esc(x[1])+'</b></div>'; }).join('')+
     (avisos||[]).filter(Boolean).map(function(a){ return '<div class="warn"><b>Ojo:</b> '+esc(a)+'</div>'; }).join('')+
     '<div class="btnrow"><button class="b2" id="mNo">'+(op.no||'Corregir')+'</button><button class="'+(op.peligro?'bR':'b3')+'" id="mSi">'+(op.si||ic('check',22,0,3)+'Sí, registrar')+'</button></div></div>';
-  document.body.appendChild(d);
+  document.body.appendChild(d); prepModal(d);
   $('mNo').onclick=function(){ d.parentNode.removeChild(d); };
   $('mSi').onclick=function(){ d.parentNode.removeChild(d); ok(); };
 }
@@ -1386,7 +1438,7 @@ function entrada(area){
   var h='<button class="back" onclick="'+(S.desdeEnc?'vistaEncargado()':'menu()')+'">'+ic('back',18,0,3)+''+(S.desdeEnc?'Vista de encargado':'Inicio')+'</button><h2>Almacén de pintura y ferretería</h2>'+segMovAlm()+'<p class="sub">Entrada al almacén (solo encargado)</p><label>¿De qué almacén?</label><div class="seg">';
   ['Pintura','Ferretería'].forEach(function(a){ h+='<button class="'+(S.area===a?'on':'')+'" onclick="entrada(\''+a+'\')">'+(a==='Pintura'?ic('brocha',22):ic('llave',22))+a+'</button>'; });
   h+='</div><label>¿Qué material llegó?</label>'+buscador('art','Escribe: laca, lija, thinner…',items)+
-     '<label>¿Cuánto llegó?</label>'+stepper('cant',0)+
+     '<label>¿Cuánto llegó?</label>'+stepper('cant',0,false,true)+
      '<label>Proveedor / factura (opcional)</label><input type="text" id="prov" maxlength="120" placeholder="Ej. Comex F-1234">';
   h+='<div class="fijo"><div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarEntrada()">'+ic('check',24,0,3)+'Registrar entrada</button></div></div>';
   pantalla(h);
