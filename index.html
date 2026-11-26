@@ -165,7 +165,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '3.2';
+var VERSION = '3.3';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -747,8 +747,9 @@ function terminarArea(i,k){
    La primera fase, hasta la cantidad del lote. */
 function hecho(l,pieza,fase){ var h=S.datos.hechas; return (h&&h[l.folio]&&h[l.folio][pieza]&&h[l.folio][pieza][fase])||0; }
 function previa(l,pieza,fase){ var b=fasesBase(l,pieza), i=b.indexOf(fase); return i>0?b[i-1]:null; }
+var ORDEN_BLOQUEO=false; /* desactivado a petición del dueño: solo se avisa, no se bloquea */
 function disponible(l,pieza,fase){
-  if(!S.datos.hechas) return Infinity;
+  if(!ORDEN_BLOQUEO || !S.datos.hechas) return Infinity;
   var b=fasesBase(l,pieza), i=b.indexOf(fase); if(i<0) return Infinity;
   var lim = i===0 ? l.cantidad : hecho(l,pieza,b[i-1]);
   return Math.max(0, lim-hecho(l,pieza,fase));
