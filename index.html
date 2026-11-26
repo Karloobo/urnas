@@ -144,6 +144,7 @@
   button.bR.chico{min-height:44px;padding:8px 16px;font-size:14px}
   .reg{display:flex;justify-content:space-between;align-items:center;gap:12px}
   .card.reg{margin-bottom:10px}
+  .quien{font-size:14px;font-weight:700;color:var(--yx)}
   .tachado{opacity:.5;text-decoration:line-through}
   .prob{border-top:1px solid var(--line);padding:10px 0}
   label.foto{display:flex;align-items:center;justify-content:center;gap:10px;text-align:center;min-height:60px;padding:14px;border:2px dashed var(--line);border-radius:10px;color:var(--yx);font-size:16px;background:var(--card)}
@@ -202,6 +203,16 @@
   input[type=number]{-moz-appearance:textfield;appearance:textfield}
   input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
   #tp{display:grid;grid-template-columns:1fr 1fr}
+  .llegada{background:var(--narS);border:2px solid var(--nar);border-radius:14px;padding:14px 14px 8px;margin-bottom:14px}
+  .lleg-cab{display:flex;align-items:center;gap:12px;color:var(--nar);margin-bottom:6px}
+  .lleg-cab b{display:block;font-size:19px;color:var(--tx);line-height:1.25}
+  .lleg-cab span{display:block;font-size:15px;color:var(--wtx);font-weight:700}
+  .lleg-fila{width:100%;display:flex;align-items:center;gap:12px;text-align:left;padding:10px 4px;border-top:1px solid var(--line);border-radius:0;min-height:56px}
+  .lleg-n{flex:none;min-width:52px;font-size:28px;font-weight:700;color:var(--nar);line-height:1}
+  .lleg-t{flex:1;line-height:1.3}.lleg-t b{display:block;font-size:16px}.lleg-t small{display:block;font-size:14px;color:var(--mu)}
+  .lleg-fila svg{color:var(--mu)}
+  .t-lleg{background:var(--narS);color:var(--wtx);border:1px solid var(--nar);margin:0 0 10px}
+  .seg.piezas button small.pz-lleg{color:var(--wtx);font-weight:700}
   .hoja-ent{padding:6px 16px}
   .he-cab{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:2px solid var(--line);font-size:15px}
   .he-cab span{color:var(--mu);text-align:right}
@@ -227,7 +238,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.0';
+var VERSION = '4.1';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -256,6 +267,7 @@ Runner.prototype.anular=function(rec){ this._go('anular',rec); };
 Runner.prototype.panel=function(rec){ this._go('panel',rec); };
 Runner.prototype.resolver=function(rec){ this._go('resolver',rec); };
 Runner.prototype.entrega=function(rec){ this._go('entrega',rec); };
+Runner.prototype.registros=function(rec){ this._go('registros',rec); };
 var google={script:{}};
 Object.defineProperty(google.script,'run',{get:function(){ return new Runner(); }});
 
@@ -500,12 +512,13 @@ function menu(){
   var h='<div class="hola"><h2>'+esc(S.nombre)+'</h2>'+(ar!=='Todas'?'<div class="area">Área<b>'+esc(ar)+'</b></div>':(esAdmin()?'<div class="area">Área<b>Encargado</b></div>':''))+'</div>';
   if(S.papel) h+='<div class="warn"><b>Modo hoja de papel:</b> vas a poder poner la fecha y hora en que se hizo cada registro'+(esAdmin()?' y quién lo hizo':'')+'. <button class="link" onclick="S.papel=false;menu()">Salir de este modo</button></div>';
   if(n) h+='<div class="warn">'+n+' registro(s) guardados en este celular, esperando internet. <button class="link" onclick="enviarPendientes()">Enviar ahora</button></div>';
+  h+=llegadasHtml();
   h+='<button class="hero" onclick="lotes()">'+ic('avance',34)+'<span><b>Avance de un lote</b><small>Terminé una fase</small></span></button>';
   h+='<div class="tiles">'+
-     '<button class="tile" onclick="estante()">'+ic('estante',28)+'<b>Tomé del estante</b></button>'+
+     (puedeEstante()?'<button class="tile" onclick="estante()">'+ic('estante',28)+'<b>Tomé del estante</b></button>':'')+
      (esAdmin()?'<button class="tile" onclick="corte()">'+ic('tijeras',28)+'<b>Corté piezas</b></button>':'')+
      (S.datos.almacen?'<button class="tile" onclick="almacen(null,\'Salida\')">'+ic('brocha',28)+'<b>Pintura y ferretería</b></button>':'')+
-     (S.datos.terminados?'<button class="tile" onclick="terminados()">'+ic('cajaok',28)+'<b>Urnas terminadas</b></button>':'')+
+     (S.datos.terminados&&esAdmin()?'<button class="tile" onclick="terminados()">'+ic('cajaok',28)+'<b>Urnas terminadas</b></button>':'')+
      '<button class="tile" onclick="problema()"><span class="roja">'+ic('alert',28)+'</span><b>Reportar problema</b></button>'+
      '</div>';
   h+=barrasAvance();
@@ -518,6 +531,36 @@ function menu(){
   if(!esInstalada() && (promptInstalar || esIphone())) h+='<button class="big b4" onclick="instalar()">'+ic('install',28)+'<span>Instalar la app en este celular<small>Para abrirla aunque no haya internet</small></span></button>';
   h+='<div class="ver">Versión '+VERSION+(S.datos&&S.datos.actualizado?' · datos del '+new Date(S.datos.actualizado).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'')+'</div>';
   pantalla(h);
+}
+function puedeEstante(){ return esAdmin() || miArea()==='Lijado'; }
+/* ---------- lo que otra área le mandó a la mía (fases "Mandar ...") ----------
+   Llegaron = piezas registradas en la fase "Mandar…"; pendientes = llegaron − las que mi área ya registró en la fase que sigue. */
+function llegadas(area){
+  var r=[]; if(!S.datos.areasFases || !S.datos.hechas || area==='Todas') return r;
+  S.datos.lotes.forEach(function(l,i){
+    PIEZAS.forEach(function(p){
+      var base=fasesBase(l,p[0]);
+      for(var k=0;k<base.length-1;k++){
+        var f=base[k], n=base[k+1], de=areaDeFase(p[0],f);
+        if(!/^mandar/i.test(nomFase(f)) || areaDeFase(p[0],n)!==area || de===area) continue;
+        var llego=hecho(l,p[0],f), pend=llego-hecho(l,p[0],n);
+        if(llego>0 && pend>0) r.push({i:i, l:l, pieza:p[0], nom:p[1], fase:n, de:de||'otra área', llego:llego, pend:pend});
+      }
+    });
+  });
+  return r;
+}
+function llegadaDe(l,pieza){ return llegadas(miArea()).filter(function(x){ return x.l.folio===l.folio && (!pieza || x.pieza===pieza); }); }
+function llegadasHtml(){
+  var ar=miArea(), ls=llegadas(ar); if(!ls.length) return '';
+  var de={}; ls.forEach(function(x){ de[x.de]=1; });
+  var tot=ls.reduce(function(a,x){ return a+x.pend; },0);
+  var h='<div class="llegada"><div class="lleg-cab">'+ic('entra',26)+'<div><b>Te mandaron de '+esc(Object.keys(de).join(' y '))+'</b><span>'+tot+' piezas por hacer</span></div></div>';
+  ls.slice(0,6).forEach(function(x){
+    h+='<button class="lleg-fila" onclick="S.verTodo=false;detalle('+x.i+',\''+x.pieza+'\')"><span class="lleg-n">'+x.pend+'</span><span class="lleg-t"><b>'+esc(x.nom)+' · '+esc(corto(x.l.folio))+'</b><small>para '+esc(nomFase(x.fase))+(x.pend<x.llego?' · llegaron '+x.llego:'')+'</small></span>'+ic('chev',18)+'</button>';
+  });
+  if(ls.length>6) h+='<div class="sub" style="margin:8px 0 0">…y '+(ls.length-6)+' más en Avance de un lote.</div>';
+  return h+'</div>';
 }
 function actualizar(){ pantalla('<p>Actualizando…</p>'); cargarDatos(inicio); }
 
@@ -616,7 +659,7 @@ function filtrarLotes(f){
     ids.forEach(function(i){
       var l=S.datos.lotes[i];
       r+='<button class="lote" onclick="detalle('+i+')"><div class="fila"><b>'+esc(corto(l.folio))+'</b>'+tagEstado(l.estado)+ic('chev',18)+'</div>'+
-         '<span class="cant">'+l.cantidad+' piezas</span>'+trackLote(l)+'</button>';
+         '<span class="cant">'+l.cantidad+' piezas</span>'+(function(){ var x=llegadaDe(l), n=x.reduce(function(a,y){ return a+y.pend; },0); return n?'<span class="tag t-lleg">Te mandaron '+n+' piezas</span>':''; })()+trackLote(l)+'</button>';
     });
     return r;
   };
@@ -750,6 +793,7 @@ function tmItems(){
   return items;
 }
 function terminados(mov,motivo,oc){
+  if(!esAdmin()) return menu();
   S.tm=S.tm||{mov:'Salida'};
   if(mov) { if(mov!==S.tm.mov){ S.tm.motivo=null; S.tm.oc=null; } S.tm.mov=mov; }
   if(motivo){ if(motivo!==S.tm.motivo) S.tm.oc=null; S.tm.motivo=motivo; }
@@ -921,7 +965,7 @@ function detalleFase(i,pieza){
   piezasOk.forEach(function(p){
     var base=fasesBase(l,p[0]), a=l.av[p[0]], fin=base.length && a===base[base.length-1];
     var est=(!a||a==='—')?'sin iniciar':(fin?'✓\u00a0terminada':'va en '+nomFase(a));
-    h+='<button class="'+(S.pieza===p[0]?'on':'')+'" onclick="detalleFase('+i+',\''+p[0]+'\')"><b class="pz">'+p[1]+'</b>'+trackPieza(l,p[0])+'<small>'+esc(est)+'</small></button>';
+    h+='<button class="'+(S.pieza===p[0]?'on':'')+'" onclick="detalleFase('+i+',\''+p[0]+'\')"><b class="pz">'+p[1]+'</b>'+trackPieza(l,p[0])+'<small>'+esc(est)+'</small>'+(function(){ var x=llegadaDe(l,p[0])[0]; return x?'<small class="pz-lleg">Te mandaron '+x.pend+'</small>':''; })()+'</button>';
   });
   h+='</div>';
   var lista=fasesDe(l,S.pieza), base=fasesBase(l,S.pieza), act=l.av[S.pieza], ci=base.indexOf(act);
@@ -934,7 +978,9 @@ function detalleFase(i,pieza){
   if(sug){
     var d0=disponible(l,S.pieza,sug);
     h+='<div class="fasebox" id="faseBox"><span class="ck">'+ic('check',24,0,3)+'</span><div><span>La siguiente</span><b id="faseNom">'+esc(nomFase(sug))+'</b>'+
-       (isFinite(d0)?'<small id="faseDisp">Puedes registrar hasta '+d0+' piezas</small>':'')+'</div></div>'+
+       (isFinite(d0)?'<small id="faseDisp">Puedes registrar hasta '+d0+' piezas</small>':'')+
+       (function(){ var x=llegadaDe(l,S.pieza).filter(function(y){ return y.fase===sug; })[0]; return x?'<small>Te mandaron <strong>'+x.pend+'</strong> piezas para esta fase</small>':''; })()+
+       (/^mandar/i.test(nomFase(sug)) && base.indexOf(sug)<base.length-1 && areaDeFase(S.pieza,base[base.indexOf(sug)+1])?'<small>A '+esc(areaDeFase(S.pieza,base[base.indexOf(sug)+1]))+' le aparece lo que mandes</small>':'')+'</div></div>'+
        '';
   } else if(yaTodo){
     h+='<div class="card">'+(areaFases()!=='Todas'?'Tu área ya registró todas sus fases de esta pieza.':'Esta pieza ya tiene registradas todas sus fases.')+' Si es otra tanda, elige la fase:</div>';
@@ -991,6 +1037,11 @@ function fechaRegistro(){
   return new Date().toISOString();
 }
 
+function descontarTornillosLocal(c){
+  var T=S.datos.tornillos; ((S.datos.almacen||{})['Ferretería']||[]).forEach(function(x){ if(x.codigo===T.codigo){ x.existencia=Math.round((x.existencia-c)*100)/100;
+    if(x.min!=null && x.alerta!=null) x.estado = x.existencia<=x.min ? 'CRÍTICO' : (x.existencia<=x.alerta ? 'POR AGOTARSE' : 'ESTABLE'); } });
+  guardar('datos',S.datos);
+}
 function guardarAvance(){
   var cant=parseInt($('cant').value,10)||0, dan=parseInt($('dan').value,10)||0;
   if(cant<=0){ $('err').textContent='Escribe cuántas piezas pasaron (más de 0) o toca "Todo el lote".'; return; }
@@ -1015,8 +1066,9 @@ function guardarAvance(){
     av.push('Todavía no se registra: '+txt+'. ¿Seguro que ya terminaste '+nomFase(fase)+'?');
   }
   if(dan>cant) av.push('Pusiste más dañadas ('+dan+') que piezas ('+cant+').');
-  preguntar([['Lote',corto(l.folio)+' · Semana '+l.semana],['Pieza',pz],['Fase que terminó',nomFase(fase)],['Piezas que pasaron',cant]].concat(dan?[['Dañadas',dan]]:[]),
-    av, function(){ encolar(rec, corto(l.folio)+' · '+pz+' · '+nomFase(fase)+' · '+cant, 'avance'); });
+  var T=S.datos.tornillos, torn=T && nomFase(fase).toLowerCase()===String(T.fase).toLowerCase() ? cant*T.porUrna : 0;
+  preguntar([['Lote',corto(l.folio)+' · Semana '+l.semana],['Pieza',pz],['Fase que terminó',nomFase(fase)],['Piezas que pasaron',cant]].concat(dan?[['Dañadas',dan]]:[]).concat(torn?[['Tornillos que se descuentan',torn+' ('+(Math.round(torn/T.porBolsa*100)/100)+' '+(T.porBolsa>1?'bolsas':'pzas')+')']]:[]),
+    av, function(){ if(torn) descontarTornillosLocal(torn/T.porBolsa); encolar(rec, corto(l.folio)+' · '+pz+' · '+nomFase(fase)+' · '+cant, 'avance'); });
 }
 /* ---------- buscador de material/piezas (busca escribiendo o abre la lista completa) ---------- */
 var NIVEL={ 'CRÍTICO':['rojo',dot('rojo'),'Queda poco'], 'POR AGOTARSE':['amarillo',dot('amarillo'),'Ya casi se acaba'], 'ESTABLE':['verde',dot('verde'),'Hay suficiente'] };
@@ -1060,6 +1112,7 @@ function cambiar(id){ S.pick[id].sel=null; if($('pista')) $('pista').innerHTML='
 function elegido(id){ var P=S.pick&&S.pick[id]; return P&&P.sel!=null ? P.items[P.sel] : null; }
 
 function estante(){
+  if(!puedeEstante()) return menu();
   var info=S.datos.estante||{};
   var items=(S.datos.piezasEstante||[]).map(function(t){ var p=t.split(' · '), e=info[t];
     return {val:t, titulo:p[0], sub:[p.slice(1).join(' · '), e?'hay '+e.existencia+(e.min?' (mínimo '+e.min+')':''):''].filter(Boolean).join(' · '), extra:p.slice(1).join(' '), nivel:e?NIVEL_EST[e.estado]:null, queda:e?e.existencia+' piezas':null}; });
@@ -1198,21 +1251,50 @@ function confirmar(enviado,resumen){
 function minutosAnular(){ return (S.datos&&S.datos.minutosAnular)||15; }
 function misRegistros(){
   var hoy=new Date(); hoy.setHours(0,0,0,0);
-  var h=hist().filter(function(x){ return x.t>=hoy.getTime() && (x.nombre===S.nombre || x.por===S.nombre); }).sort(function(a,b){ return b.t-a.t; });
-  var html='<button class="back" onclick="menu()">'+ic('back',18,0,3)+'Inicio</button><h2>Mis registros de hoy</h2><p class="sub">Si te equivocaste, puedes anular un registro durante los primeros '+minutosAnular()+' minutos. Después, pídeselo al encargado.</p>';
-  if(!h.length) html+='<div class="card">Hoy no has registrado nada en este celular.</div>';
-  h.forEach(function(x){
-    var hora=new Date(x.t).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
-    var puede = x.estado==='pendiente' || (x.estado==='enviado' && (esAdmin() || Date.now()-x.t < minutosAnular()*60000));
-    var tag={pendiente:'<span class="tag t-Sin">sin enviar</span>',enviado:'<span class="tag t-Ter">enviado</span>',anulado:'<span class="tag t-Atr">anulado</span>',rechazado:'<span class="tag t-Atr">no se guardó</span>'}[x.estado]||'';
-    html+='<div class="card reg'+(x.estado==='anulado'?' tachado':'')+'"><div><b>'+esc(hora)+'</b> '+tag+'<br>'+esc(x.resumen)+'</div>'+
-          (puede?'<button class="bR chico" onclick="anularReg(\''+x.id+'\')">Anular</button>':'')+'</div>';
-  });
+  /* los que todavía no salen de este celular */
+  var pend=hist().filter(function(x){ return x.estado==='pendiente' && (x.nombre===S.nombre || x.por===S.nombre); }).sort(function(a,b){ return b.t-a.t; });
+  var html='<button class="back" onclick="menu()">'+ic('back',18,0,3)+'Inicio</button><h2>'+(esAdmin()?'Registros de todos':'Mis registros de hoy')+'</h2>'+
+    '<p class="sub">'+(esAdmin()?'Los últimos 7 días, de todos. Puedes anular cualquiera.':'Si te equivocaste, puedes anular un registro durante los primeros '+minutosAnular()+' minutos. Después, pídeselo al encargado.')+'</p>';
+  pend.forEach(function(x){ html+=regHtml({id:x.id, texto:x.resumen, cuando:new Date(x.t).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}), nombre:x.nombre, puede:true}, '<span class="tag t-Sin">sin enviar</span>'); });
+  html+='<div id="regsSrv"><p class="sub">Cargando registros…</p></div>';
   pantalla(html);
+  if(!hayScript()){ regsLocal(); return; }
+  google.script.run
+    .withSuccessHandler(function(r){ S.regs=r.registros||[]; pintarRegs(); })
+    .withFailureHandler(function(){ regsLocal(true); })
+    .registros({ nombre:S.nombre, firma:S.firma });
+}
+function regHtml(x, tag){
+  return '<div class="card reg"><div><b>'+esc(x.cuando)+'</b> '+(tag||'')+(esAdmin()&&x.nombre?' <span class="quien">'+esc(x.nombre)+'</span>':'')+'<br>'+esc(x.texto)+'</div>'+
+    (x.puede?'<button class="bR chico" onclick="anularReg(\''+esc(x.id)+'\', misRegistros)">Anular</button>':'')+'</div>';
+}
+function pintarRegs(){
+  var el=$('regsSrv'); if(!el) return; var rs=S.regs||[], h='';
+  if(esAdmin()){
+    var ns=[]; rs.forEach(function(r){ if(ns.indexOf(r.nombre)<0) ns.push(r.nombre); });
+    h+='<label>¿De quién?</label><select id="fquienR" onchange="S.fRegs=this.value;pintarRegs()"><option value="">Todos</option>'+ns.map(function(n){ return '<option'+(S.fRegs===n?' selected':'')+'>'+esc(n)+'</option>'; }).join('')+'</select><div style="height:10px"></div>';
+    if(S.fRegs) rs=rs.filter(function(r){ return r.nombre===S.fRegs; });
+  }
+  if(!rs.length) h+='<div class="card">'+(esAdmin()?'No hay registros.':'Hoy no has registrado nada.')+'</div>';
+  rs.forEach(function(r){ h+=regHtml(r, '<span class="tag t-Ter">guardado</span>'); });
+  el.innerHTML=h;
+}
+/* Sin internet: lo que se registró en este celular */
+function regsLocal(sinRed){
+  var el=$('regsSrv'); if(!el) return;
+  var hoy=new Date(); hoy.setHours(0,0,0,0);
+  var h=hist().filter(function(x){ return x.t>=hoy.getTime() && x.estado!=='pendiente' && (x.nombre===S.nombre || x.por===S.nombre); }).sort(function(a,b){ return b.t-a.t; });
+  var t=(sinRed?'<div class="warn">Sin internet: solo se ven los registros hechos en este celular.</div>':'');
+  if(!h.length) t+='<div class="card">Hoy no has registrado nada en este celular.</div>';
+  h.forEach(function(x){
+    var tag={enviado:'<span class="tag t-Ter">enviado</span>',anulado:'<span class="tag t-Atr">anulado</span>',rechazado:'<span class="tag t-Atr">no se guardó</span>'}[x.estado]||'';
+    t+=regHtml({id:x.id, texto:x.resumen, cuando:new Date(x.t).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}), puede:false}, tag);
+  });
+  el.innerHTML=t;
 }
 function anularReg(id, alTerminar){
   var x=hist().filter(function(r){ return r.id===id; })[0];
-  if(!x){ var u=((S.panelDatos&&S.panelDatos.ultimos)||[]).filter(function(r){ return r.id===id; })[0]; x={resumen:u?u.nombre+' · '+u.texto:'Registro', id:id, estado:'enviado'}; }
+  if(!x){ var u=((S.panelDatos&&S.panelDatos.ultimos)||[]).concat(S.regs||[]).filter(function(r){ return r.id===id; })[0]; x={resumen:u?u.nombre+' · '+u.texto:'Registro', id:id, estado:'enviado'}; }
   preguntar([['Registro',x.resumen]], ['Se va a borrar de la hoja como si nunca se hubiera registrado.'], function(){
     if(x.estado==='pendiente' && cola().some(function(r){ return r.id===id; })){
       setCola(cola().filter(function(r){ return r.id!==id; })); histMarcar(id,'anulado'); cargarDatos(function(){}); (alTerminar||misRegistros)(); return;
