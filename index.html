@@ -202,6 +202,16 @@
   input[type=number]{-moz-appearance:textfield;appearance:textfield}
   input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
   #tp{display:grid;grid-template-columns:1fr 1fr}
+  .hoja-ent{padding:6px 16px}
+  .he-cab{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:2px solid var(--line);font-size:15px}
+  .he-cab span{color:var(--mu);text-align:right}
+  .he-fila{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .he-pz{flex:none;min-width:44px;font-size:20px;font-weight:700;color:var(--yx)}
+  .he-mod{flex:1;font-weight:700;line-height:1.3}
+  .he-mod small{display:block;font-weight:400;font-size:13px;color:var(--mu);margin-top:2px}
+  .he-tot{flex:none;font-weight:700;white-space:nowrap}
+  .he-suma{border-bottom:0}.he-suma .he-mod{font-weight:400;color:var(--mu)}
+  input[type=date]{width:100%;font:inherit;color:var(--tx);padding:14px;border:2px solid var(--line);border-radius:10px;background:var(--card);min-height:54px}
   .hide{display:none}
   .ver{font-size:12px;color:var(--mu);text-align:center;margin-top:14px}
 </style>
@@ -217,11 +227,11 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '3.9';
+var VERSION = '4.0';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
-  var t = setTimeout(function(){ if(ctrl) ctrl.abort(); }, 20000);
+  var t = setTimeout(function(){ if(ctrl) ctrl.abort(); }, accion==='entrega' ? 90000 : 20000);
   var p = accion==='datos'
     ? fetch(API_URL+'?accion=datos&t='+Date.now(), {signal: ctrl&&ctrl.signal})
     : fetch(API_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
@@ -245,6 +255,7 @@ Runner.prototype.registrar=function(rec){ this._go('registrar',rec); };
 Runner.prototype.anular=function(rec){ this._go('anular',rec); };
 Runner.prototype.panel=function(rec){ this._go('panel',rec); };
 Runner.prototype.resolver=function(rec){ this._go('resolver',rec); };
+Runner.prototype.entrega=function(rec){ this._go('entrega',rec); };
 var google={script:{}};
 Object.defineProperty(google.script,'run',{get:function(){ return new Runner(); }});
 
@@ -327,7 +338,19 @@ var ICON={
  moon:'<path d="M20 14A8 8 0 1 1 10 4a6 6 0 0 0 10 10z"/>',
  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/>',
  half:'<circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/>',
- install:'<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>'
+ install:'<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
+ avance:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2.5h6v3.5H9z"/><path d="M8.5 13.5l2.5 2.5 4.5-5"/>',
+ registros:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2.5h6v3.5H9z"/><path d="M9 11h6M9 15h6"/>',
+ estante:'<path d="M3 2v20M21 2v20M3 9h18M3 15.5h18M3 22h18"/><path d="M6 5h4v4H6zM13 11.5h5v4h-5zM7 18h4v4H7z"/>',
+ tijeras:'<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/>',
+ brocha:'<path d="M18.4 2.6L14 7l-1.6-1.6a2 2 0 0 0-2.8 0L8 7l9 9 1.6-1.6a2 2 0 0 0 0-2.8L17 10l4.4-4.4a2.1 2.1 0 1 0-3-3z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/><path d="M14.5 17.5L4.5 15"/>',
+ llave:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z"/>',
+ cajaok:'<path d="M21 12V7l-9-4-9 4v10l9 4 2-.9"/><path d="M3 7l9 4 9-4M12 11v10"/><path d="M15.5 18l2 2 4-4.5"/>',
+ salir:'<path d="M14 3H5v18h9"/><path d="M10 12h11M17 8l4 4-4 4"/>',
+ camion:'<path d="M2 5h13v11H2z"/><path d="M15 9h4l3 3.5V16h-7z"/><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="18" r="2.2"/>',
+ pdf:'<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M12 11v6M9.5 14.5L12 17l2.5-2.5"/>',
+ share:'<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/>',
+ mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>'
 };
 function ic(n,s,c,w){ s=s||22; return '<svg class="ic" aria-hidden="true" width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="'+(c||'currentColor')+'" stroke-width="'+(w||2)+'" stroke-linecap="round" stroke-linejoin="round">'+(ICON[n]||'')+'</svg>'; }
 function dot(c){ return '<i class="dot '+c+'"></i>'; }
@@ -477,20 +500,20 @@ function menu(){
   var h='<div class="hola"><h2>'+esc(S.nombre)+'</h2>'+(ar!=='Todas'?'<div class="area">Área<b>'+esc(ar)+'</b></div>':(esAdmin()?'<div class="area">Área<b>Encargado</b></div>':''))+'</div>';
   if(S.papel) h+='<div class="warn"><b>Modo hoja de papel:</b> vas a poder poner la fecha y hora en que se hizo cada registro'+(esAdmin()?' y quién lo hizo':'')+'. <button class="link" onclick="S.papel=false;menu()">Salir de este modo</button></div>';
   if(n) h+='<div class="warn">'+n+' registro(s) guardados en este celular, esperando internet. <button class="link" onclick="enviarPendientes()">Enviar ahora</button></div>';
-  h+='<button class="hero" onclick="lotes()">'+ic('hammer',34)+'<span><b>Avance de un lote</b><small>Terminé una fase</small></span></button>';
+  h+='<button class="hero" onclick="lotes()">'+ic('avance',34)+'<span><b>Avance de un lote</b><small>Terminé una fase</small></span></button>';
   h+='<div class="tiles">'+
-     '<button class="tile" onclick="estante()">'+ic('box',28)+'<b>Tomé del estante</b></button>'+
-     (esAdmin()?'<button class="tile" onclick="corte()">'+ic('saw',28)+'<b>Corté piezas</b></button>':'')+
-     (S.datos.almacen?'<button class="tile" onclick="almacen(null,\'Salida\')">'+ic('can',28)+'<b>Pintura y ferretería</b></button>':'')+
-     (S.datos.terminados?'<button class="tile" onclick="terminados()">'+ic('tag',28)+'<b>Urnas terminadas</b></button>':'')+
+     '<button class="tile" onclick="estante()">'+ic('estante',28)+'<b>Tomé del estante</b></button>'+
+     (esAdmin()?'<button class="tile" onclick="corte()">'+ic('tijeras',28)+'<b>Corté piezas</b></button>':'')+
+     (S.datos.almacen?'<button class="tile" onclick="almacen(null,\'Salida\')">'+ic('brocha',28)+'<b>Pintura y ferretería</b></button>':'')+
+     (S.datos.terminados?'<button class="tile" onclick="terminados()">'+ic('cajaok',28)+'<b>Urnas terminadas</b></button>':'')+
      '<button class="tile" onclick="problema()"><span class="roja">'+ic('alert',28)+'</span><b>Reportar problema</b></button>'+
      '</div>';
   h+=barrasAvance();
   h+='<div class="herr">'+
-     '<button onclick="misRegistros()">'+ic('list')+'Mis registros</button>'+
+     '<button onclick="misRegistros()">'+ic('registros')+'Mis registros</button>'+
      '<button onclick="S.papel=true;menu()">'+ic('paper')+'Hoja de papel</button>'+
      '<button onclick="actualizar()">'+ic('refresh')+'Actualizar</button>'+
-     '<button onclick="salir()">'+ic('logout')+'Salir</button></div>';
+     '<button onclick="salir()">'+ic('salir')+'Salir</button></div>';
   h+='<button class="link tema" onclick="cambiarTema()">'+TEMAS[leer('tema','claro')]+'</button>';
   if(!esInstalada() && (promptInstalar || esIphone())) h+='<button class="big b4" onclick="instalar()">'+ic('install',28)+'<span>Instalar la app en este celular<small>Para abrirla aunque no haya internet</small></span></button>';
   h+='<div class="ver">Versión '+VERSION+(S.datos&&S.datos.actualizado?' · datos del '+new Date(S.datos.actualizado).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'')+'</div>';
@@ -1099,7 +1122,7 @@ function almacen(area,mov){
   S.area=area||S.area||'Pintura';
   var items=articulos().map(function(x,i){ return {val:i, titulo:x.nombre, sub:'Quedan '+x.existencia+' '+x.unidad, extra:x.codigo, nivel:NIVEL[x.estado], queda:x.existencia+' '+x.unidad}; });
   var h='<button class="back" onclick="menu()">'+ic('back',18,0,3)+'Inicio</button><h2>Almacén de pintura y ferretería</h2>'+segMovAlm()+'<label>¿De qué almacén?</label><div class="seg">';
-  ['Pintura','Ferretería'].forEach(function(a){ h+='<button class="'+(S.area===a?'on':'')+'" onclick="almacen(\''+a+'\')">'+(a==='Pintura'?ic('can',22):ic('nut',22))+a+'</button>'; });
+  ['Pintura','Ferretería'].forEach(function(a){ h+='<button class="'+(S.area===a?'on':'')+'" onclick="almacen(\''+a+'\')">'+(a==='Pintura'?ic('brocha',22):ic('llave',22))+a+'</button>'; });
   h+='</div><label>¿Qué material?</label>'+buscador('art','Escribe: laca, lija, thinner…',items)+
      '<div class="sub" style="margin-top:6px">'+dot('verde')+' hay suficiente · '+dot('amarillo')+' ya casi se acaba · '+dot('rojo')+' queda poco</div>'+
      '<label>¿Cuánto tomaste?</label>'+stepper('cant',0)+
@@ -1166,7 +1189,7 @@ function confirmar(enviado,resumen){
   else if(S.ultimo==='entrada'){ h+='<button class="big b1" onclick="entrada()">Registrar otra entrada</button>'+(S.desdeEnc?'<button class="big b2" onclick="vistaEncargado()">'+ic('key')+'Vista de encargado</button>':''); }
   else if(S.ultimo==='terminado'){ h+='<button class="big b1" onclick="terminados()">Otro movimiento de terminados</button>'; }
   else if(S.ultimo==='problema'){ h+='<button class="big b1" onclick="problema()">Reportar otro problema</button>'; }
-  h+='<button class="big b2" onclick="misRegistros()">'+ic('list')+'Ver mis registros de hoy</button>';
+  h+='<button class="big b2" onclick="misRegistros()">'+ic('registros')+'Ver mis registros de hoy</button>';
   h+='<button class="big b2" onclick="menu()">Inicio</button>';
   pantalla(h);
 }
@@ -1249,7 +1272,7 @@ function entrada(area){
   if(!esAdmin()){ S.almMov='Salida'; return almacen(null,'Salida'); }
   var items=articulos().map(function(x,i){ return {val:i, titulo:x.nombre, sub:'Hay '+x.existencia+' '+x.unidad, extra:x.codigo, nivel:NIVEL[x.estado], queda:x.existencia+' '+x.unidad}; });
   var h='<button class="back" onclick="'+(S.desdeEnc?'vistaEncargado()':'menu()')+'">'+ic('back',18,0,3)+''+(S.desdeEnc?'Vista de encargado':'Inicio')+'</button><h2>Almacén de pintura y ferretería</h2>'+segMovAlm()+'<p class="sub">Entrada al almacén (solo encargado)</p><label>¿De qué almacén?</label><div class="seg">';
-  ['Pintura','Ferretería'].forEach(function(a){ h+='<button class="'+(S.area===a?'on':'')+'" onclick="entrada(\''+a+'\')">'+(a==='Pintura'?ic('can',22):ic('nut',22))+a+'</button>'; });
+  ['Pintura','Ferretería'].forEach(function(a){ h+='<button class="'+(S.area===a?'on':'')+'" onclick="entrada(\''+a+'\')">'+(a==='Pintura'?ic('brocha',22):ic('llave',22))+a+'</button>'; });
   h+='</div><label>¿Qué material llegó?</label>'+buscador('art','Escribe: laca, lija, thinner…',items)+
      '<label>¿Cuánto llegó?</label>'+stepper('cant',0)+
      '<label>Proveedor / factura (opcional)</label><input type="text" id="prov" maxlength="120" placeholder="Ej. Comex F-1234">';
@@ -1282,10 +1305,94 @@ function vistaEncargado(){
   S.desdeEnc=true;
   var h='<button class="back" onclick="S.desdeEnc=false;menu()">'+ic('back',18,0,3)+'Inicio</button><h2>Vista de encargado</h2><p class="sub">Solo para encargados</p>'+
     (S.datos.almacen?'<button class="big b1" onclick="entrada()">'+ic('entra',28)+'<span>Llegó material<small>Entradas al almacén de pintura y ferretería</small></span></button>':'')+
+    '<button class="big b2" onclick="hojaEntrega()">'+ic('camion',28)+'<span>Hoja de entrega<small>Genera el PDF de lo empacado por semana para mandarlo o imprimirlo</small></span></button>'+
     '<button class="big b2" onclick="progresoAreas()">'+ic('chart',28)+'<span>Progreso por área<small>Corte, Lijado, Pintura y Empacado de cada pedido, por semana y por lote</small></span></button>'+
     '<button class="big b2" onclick="anularRegistros()">'+ic('list',28)+'<span>Anular registros<small>Registros de todos de los últimos 7 días; anula los que estén mal</small></span></button>'+
     '<button class="big b2" onclick="problemasEnc()">'+ic('alert',28)+'<span>Problemas reportados<small>Ver los pendientes (con foto en tu correo) y marcarlos como resueltos</small></span></button>';
   pantalla(h);
+}
+/* ---------- hoja de entrega (PDF) ---------- */
+function entregaRec(extra){ var r={ nombre:S.nombre, firma:S.firma }; for(var k in extra) r[k]=extra[k]; return r; }
+function errTxt(err){ return esc(String(err&&err.message||err).replace(/^SIN_RED:.*/,'Se necesita internet para esto.')); }
+function hojaEntrega(){
+  if(!esAdmin()) return menu();
+  pantalla('<button class="back" onclick="vistaEncargado()">'+ic('back',18,0,3)+'Vista de encargado</button><h2>Hoja de entrega</h2>'+
+    '<p class="sub">Elige el pedido y la semana. Sale en PDF para mandarlo o imprimirlo.</p><div id="ent"><p class="sub">Cargando pedidos…</p></div>');
+  google.script.run
+    .withSuccessHandler(function(r){
+      var ps=r.pedidos||[]; S.ent={pedidos:ps};
+      var act=ps.filter(function(p){ return p.estado==='Activo' && p.semanas.length; })[0] || ps.filter(function(p){ return p.semanas.length; })[0] || ps[0];
+      if(act){ S.ent.oc=act.oc; S.ent.sem=act.semanas.length?act.semanas[act.semanas.length-1]:'Todas'; }
+      pintarEntrega();
+    })
+    .withFailureHandler(function(err){ if($('ent')) $('ent').innerHTML='<div class="card">'+errTxt(err)+'</div>'; })
+    .entrega(entregaRec({modo:'lista'}));
+}
+function pedidoEnt(){ var E=S.ent; return (E.pedidos||[]).filter(function(p){ return p.oc===E.oc; })[0]; }
+function pintarEntrega(){
+  var E=S.ent, el=$('ent'); if(!el) return;
+  if(!E.pedidos.length){ el.innerHTML='<div class="card">No hay pedidos en la hoja.</div>'; return; }
+  var p=pedidoEnt();
+  var h='<label>Pedido</label><select id="entOc" onchange="S.ent.oc=this.value;var p=pedidoEnt();S.ent.sem=p&&p.semanas.length?p.semanas[p.semanas.length-1]:\'Todas\';pintarEntrega()">'+
+    E.pedidos.map(function(x){ return '<option value="'+esc(x.oc)+'"'+(x.oc===E.oc?' selected':'')+'>'+esc(x.oc)+(x.cliente?' · '+esc(x.cliente):'')+(x.estado?' ('+esc(x.estado)+')':'')+'</option>'; }).join('')+'</select>';
+  if(!p || !p.semanas.length){ el.innerHTML=h+'<div class="card" style="margin-top:12px">Este pedido todavía no tiene urnas empacadas.</div>'; return; }
+  h+='<label>Semana</label><div class="seg">'+p.semanas.concat(['Todas']).map(function(sm){
+      return '<button class="'+(String(E.sem)===String(sm)?'on':'')+'" onclick="S.ent.sem=\''+esc(sm)+'\';S.ent.fecha=null;pintarEntrega()">'+(sm==='Todas'?'Todo el pedido':'Semana '+esc(sm))+'</button>'; }).join('')+'</div>'+
+    '<div id="entVista"><p class="sub">Cargando…</p></div>';
+  el.innerHTML=h; S.ent.pdf=null;
+  google.script.run
+    .withSuccessHandler(function(r){ S.ent.hoja=r.hoja; if(!S.ent.fecha) S.ent.fecha=r.hoja.fecha; pintarVistaEntrega(); })
+    .withFailureHandler(function(err){ if($('entVista')) $('entVista').innerHTML='<div class="card">'+errTxt(err)+'</div>'; })
+    .entrega(entregaRec({modo:'datos', oc:E.oc, semana:E.sem}));
+}
+function dinero(x){ return '$'+Number(x||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+function pintarVistaEntrega(){
+  var d=S.ent.hoja, el=$('entVista'); if(!el) return;
+  if(!d.filas.length){ el.innerHTML='<div class="card">No hay urnas empacadas para '+(d.semana==='Todas'?'este pedido':'la semana '+esc(d.semana))+'.</div>'; return; }
+  var h='<div class="card hoja-ent"><div class="he-cab"><b>'+esc(d.oc)+'</b><span>'+esc(d.cliente||'')+'</span></div>'+
+    d.filas.map(function(f){ return '<div class="he-fila"><span class="he-pz">'+f.piezas+'</span><span class="he-mod">'+esc(f.modelo)+'<small>'+esc(f.codigo)+' · '+dinero(f.precio)+' c/u</small></span><span class="he-tot">'+dinero(f.total)+'</span></div>'; }).join('')+
+    '<div class="he-fila he-suma"><span class="he-pz">'+d.piezas+'</span><span class="he-mod">urnas en total</span><span class="he-tot">'+dinero(d.total)+'</span></div></div>'+
+    '<label>Fecha que sale en la hoja</label><input type="date" id="entFecha" value="'+esc(S.ent.fecha||d.fecha)+'" onchange="S.ent.fecha=this.value;S.ent.pdf=null;pintarPdfListo()">'+
+    '<div id="entPdf"></div>'+
+    '<details class="extra"><summary>Mandar por correo</summary><label>Correo (si lo dejas vacío, llega a los correos de avisos)</label>'+
+    '<input type="text" id="entPara" inputmode="email" placeholder="cliente@correo.com">'+
+    '<div class="btnrow"><button class="b2" onclick="correoEntrega()">'+ic('mail')+'Enviar PDF por correo</button></div><div id="entCorreo"></div></details>';
+  el.innerHTML=h; pintarPdfListo();
+}
+function pintarPdfListo(){
+  var el=$('entPdf'); if(!el) return; var P=S.ent.pdf;
+  if(!P){ el.innerHTML='<div class="btnrow"><button class="b3" onclick="generarPdf()">'+ic('pdf',24)+'Generar PDF</button></div>'; return; }
+  var puede=false; try{ puede=!!(navigator.canShare && navigator.canShare({files:[P.file]})); }catch(e){}
+  el.innerHTML='<div class="ok-lote" style="margin-top:14px;display:flex;gap:8px;align-items:center">'+ic('check',20,0,3)+'<span>PDF listo: '+esc(P.nombre)+'</span></div>'+
+    '<div class="btnrow">'+(puede?'<button class="b3" onclick="compartirPdf()">'+ic('share')+'Compartir</button>':'')+
+    '<button class="'+(puede?'b2':'b3')+'" onclick="descargarPdf()">'+ic('install')+'Abrir / descargar</button></div>'+
+    '<p class="sub" style="margin-top:10px">Para imprimir: ábrelo y usa Imprimir del visor de PDF.</p>';
+}
+function generarPdf(){
+  var el=$('entPdf'); if(el) el.innerHTML='<div class="card">'+ic('clock',20)+' Generando el PDF… (puede tardar unos segundos)</div>';
+  google.script.run
+    .withSuccessHandler(function(r){
+      var bin=atob(r.pdf), u=new Uint8Array(bin.length); for(var i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i);
+      var blob=new Blob([u],{type:'application/pdf'}), file=null; try{ file=new File([blob],r.nombre,{type:'application/pdf'}); }catch(e){}
+      S.ent.pdf={blob:blob, file:file, nombre:r.nombre}; pintarPdfListo();
+    })
+    .withFailureHandler(function(err){ if($('entPdf')) $('entPdf').innerHTML='<div class="warn err">No se pudo generar: '+errTxt(err)+'</div><div class="btnrow"><button class="b3" onclick="generarPdf()">Intentar otra vez</button></div>'; })
+    .entrega(entregaRec({modo:'pdf', oc:S.ent.oc, semana:S.ent.sem, fecha:S.ent.fecha}));
+}
+function compartirPdf(){ var P=S.ent.pdf; if(!P) return; navigator.share({files:[P.file], title:P.nombre}).catch(function(){}); }
+function descargarPdf(){
+  var P=S.ent.pdf; if(!P) return;
+  var url=URL.createObjectURL(P.blob), a=document.createElement('a'); a.href=url; a.download=P.nombre; a.target='_blank'; a.rel='noopener';
+  document.body.appendChild(a); a.click(); setTimeout(function(){ a.parentNode&&a.parentNode.removeChild(a); URL.revokeObjectURL(url); }, 60000);
+}
+function correoEntrega(){
+  var el=$('entCorreo'), para=($('entPara').value||'').trim();
+  if(para && !/^[^@\s]+@[^@\s]+\.[^@\s]+(\s*,\s*[^@\s]+@[^@\s]+\.[^@\s]+)*$/.test(para)){ el.innerHTML='<div class="err">Revisa el correo.</div>'; return; }
+  el.innerHTML='<p class="sub" style="margin-top:10px">Enviando…</p>';
+  google.script.run
+    .withSuccessHandler(function(r){ el.innerHTML='<div class="ok-lote" style="margin-top:10px">Enviado a '+esc(r.enviado)+'</div>'; })
+    .withFailureHandler(function(err){ el.innerHTML='<div class="warn err" style="margin-top:10px">No se pudo enviar: '+errTxt(err)+'</div>'; })
+    .entrega(entregaRec({modo:'correo', oc:S.ent.oc, semana:S.ent.sem, fecha:S.ent.fecha, para:para}));
 }
 /* Pide al servidor los registros y problemas (necesita internet) */
 function cargarPanel(titulo, pintar){
