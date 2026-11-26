@@ -147,7 +147,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '2.6';
+var VERSION = '2.7';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -459,7 +459,7 @@ function filtrarLotes(f){
     h+='<div class="oc semana">SEMANA '+esc(p[1])+' <span>· '+tot+' urnas · empacadas '+emp+'</span></div>';
     ids.forEach(function(i){
       var l=S.datos.lotes[i], av=[];
-      PIEZAS.forEach(function(pz){ var v=l.av[pz[0]]; if(v && v!=='—' && v!=='No aplica') av.push(pz[1]+': '+v); });
+      PIEZAS.forEach(function(pz){ var v=l.av[pz[0]]; if(v && v!=='—' && v!=='No aplica') av.push(pz[1]+': '+nomFase(v)); });
       var al=S.datos.areasFases?avanceLote(l):null;
       h+='<button class="lote" onclick="detalle('+i+')"><b>'+esc(corto(l.folio))+'</b>'+tagEstado(l.estado)+
          '<span>'+l.cantidad+' piezas'+(l.empacadas?' · empacadas '+Math.min(l.empacadas,l.cantidad):'')+'</span><span>'+(av.length?esc(av.join(' · ')):'Sin avance registrado')+'</span>'+
@@ -660,9 +660,16 @@ function guardarTerminado(){
 }
 
 /* Fases que aplican a este lote (sin las de techo si el modelo no lleva techo) */
+/* Nombre de la fase como lo ve el trabajador: sin el número ("01 - ") ni "(si lleva)" */
+function nomFase(f){ return String(f||'').replace(/^\s*\d+\s*-\s*/,'').replace(/\s*\(si lleva\)\s*/i,'').trim(); }
+/* ¿Esta fase solo aplica a modelos con techo? (marcada en Áreas o con "(si lleva)" / "techo" en el nombre) */
+function esFaseTecho(pieza,f){
+  if(/\(si lleva\)|techo/i.test(f)) return true;
+  return (S.datos.areasFases||[]).some(function(e){ return e.pieza===pieza && e.fase===f && e.techo; });
+}
 function fasesDe(l,pieza){
   var lista=S.datos.fases[pieza]||[];
-  if(pieza==='Wakal' && !l.techo) lista=lista.filter(function(f){ return !/techo/i.test(f); });
+  if(pieza!=='Techo' && !l.techo) lista=lista.filter(function(f){ return !esFaseTecho(pieza,f); });
   if(S.datos.faseEmpaque) lista=lista.filter(function(f){ return f!==S.datos.faseEmpaque; });
   if(miArea()!=='Todas' && !S.verFases && S.datos.areasFases){ var a=miArea(); var sol=lista.filter(function(f){ var x=areaDeFase(pieza,f); return !x || x===a; }); if(sol.length) lista=sol; }
   return lista;
@@ -690,8 +697,8 @@ function detalle(i,pieza){
   h+='</div>';
   var lista=fasesDe(l,S.pieza), sug=sugerida(l,S.pieza), act=l.av[S.pieza];
   h+='<label>Fase que terminaste</label><select id="fase">';
-  lista.forEach(function(f){ h+='<option'+(f===sug?' selected':'')+'>'+esc(f)+'</option>'; });
-  h+='</select><div class="sug">Va en: '+esc(act&&act!=='—'?act:'sin iniciar')+' → sugerida la siguiente</div>';
+  lista.forEach(function(f){ h+='<option value="'+esc(f)+'"'+(f===sug?' selected':'')+'>'+esc(nomFase(f))+'</option>'; });
+  h+='</select><div class="sug">Va en: '+esc(act&&act!=='—'?nomFase(act):'sin iniciar')+' → sugerida la siguiente</div>';
   if(miArea()!=='Todas' && S.datos.areasFases) h+='<button class="link" onclick="S.verFases=!S.verFases;detalle('+i+')">'+(S.verFases?'Ver solo fases de '+miArea():'Ver todas las fases')+'</button>';
   h+='<label>¿Cuántas piezas pasaron?</label>'+stepper('cant',0);
   h+='<label>¿Se dañó alguna?</label>'+stepper('dan',0);
@@ -715,9 +722,9 @@ function guardarAvance(){
   var pz=(PIEZAS.filter(function(p){ return p[0]===S.pieza; })[0]||[0,S.pieza])[1];
   var rec={ id:uid(), tipo:'avance', nombre:S.nombre, ts:fechaRegistro(), folio:S.lote.folio, pieza:S.pieza,
             fase:$('fase').value, cantidad:cant, danadas:dan, comentario:$('com').value.trim() };
-  preguntar([['Lote',corto(S.lote.folio)],['Pieza',pz],['Fase',rec.fase],['Piezas que pasaron',cant]].concat(dan?[['Dañadas',dan]]:[]),
+  preguntar([['Lote',corto(S.lote.folio)],['Pieza',pz],['Fase',nomFase(rec.fase)],['Piezas que pasaron',cant]].concat(dan?[['Dañadas',dan]]:[]),
     [cant>S.lote.cantidad?'Pusiste '+cant+' y el lote es de '+S.lote.cantidad+'.':''],
-    function(){ encolar(rec, corto(S.lote.folio)+' · '+rec.fase, 'avance'); });
+    function(){ encolar(rec, corto(S.lote.folio)+' · '+nomFase(rec.fase), 'avance'); });
 }
 
 /* ---------- buscador de material/piezas (busca escribiendo o abre la lista completa) ---------- */
