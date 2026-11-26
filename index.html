@@ -207,10 +207,12 @@
   .lleg-cab{display:flex;align-items:center;gap:12px;color:var(--nar);margin-bottom:6px}
   .lleg-cab b{display:block;font-size:19px;color:var(--tx);line-height:1.25}
   .lleg-cab span{display:block;font-size:15px;color:var(--wtx);font-weight:700}
-  .lleg-fila{width:100%;display:flex;align-items:center;gap:12px;text-align:left;padding:10px 4px;border-top:1px solid var(--line);border-radius:0;min-height:56px}
+  .lleg-fila{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+  .lleg-info{flex:1;min-width:0;display:flex;align-items:center;gap:12px;text-align:left;padding:4px;border-radius:8px;min-height:52px}
+  .lleg-ok{flex:none;display:flex;align-items:center;gap:6px;min-height:48px;padding:8px 14px;background:var(--nar);color:#fff;font-weight:700;font-size:16px}
   .lleg-n{flex:none;min-width:52px;font-size:28px;font-weight:700;color:var(--nar);line-height:1}
   .lleg-t{flex:1;line-height:1.3}.lleg-t b{display:block;font-size:16px}.lleg-t small{display:block;font-size:14px;color:var(--mu)}
-  .lleg-fila svg{color:var(--mu)}
+  .lleg-info svg{color:var(--mu)}.lleg-ok svg{color:#fff}
   .t-lleg{background:var(--narS);color:var(--wtx);border:1px solid var(--nar);margin:0 0 10px}
   .seg.piezas button small.pz-lleg{color:var(--wtx);font-weight:700}
   .hoja-ent{padding:6px 16px}
@@ -238,7 +240,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.1';
+var VERSION = '4.2';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -417,6 +419,7 @@ window.addEventListener('offline',function(){ enLinea=false; pintarEstado(); });
 /* Mientras no se envían, los registros pendientes adelantan el avance que se muestra */
 function aplicarPendientesALotes(){
   if(!S.datos) return;
+  cola().forEach(function(r){ if(r.tipo==='recibido') sumarRecib(r.folio,r.pieza,r.fase,Number(r.enviadas)||0); });
   cola().forEach(function(r){ if(r.tipo==='avance') (r.items||[{pieza:r.pieza,fase:r.fase}]).forEach(function(x){ avanzarLocal(r.folio,x.pieza,x.fase); sumarHecho(r.folio,x.pieza,x.fase,Number(r.cantidad)||0); }); });
 }
 function avanzarLocal(folio,pieza,fase){
@@ -543,24 +546,50 @@ function llegadas(area){
       for(var k=0;k<base.length-1;k++){
         var f=base[k], n=base[k+1], de=areaDeFase(p[0],f);
         if(!/^mandar/i.test(nomFase(f)) || areaDeFase(p[0],n)!==area || de===area) continue;
-        var llego=hecho(l,p[0],f), pend=llego-hecho(l,p[0],n);
-        if(llego>0 && pend>0) r.push({i:i, l:l, pieza:p[0], nom:p[1], fase:n, de:de||'otra área', llego:llego, pend:pend});
+        var llego=hecho(l,p[0],f), pend=llego-hecho(l,p[0],n), conf=llego-recib(l,p[0],f);
+        if(llego>0 && (pend>0 || conf>0)) r.push({i:i, l:l, pieza:p[0], nom:p[1], envio:f, fase:n, de:de||'otra área', llego:llego, pend:Math.max(0,pend), conf:Math.max(0,conf)});
       }
     });
   });
   return r;
 }
-function llegadaDe(l,pieza){ return llegadas(miArea()).filter(function(x){ return x.l.folio===l.folio && (!pieza || x.pieza===pieza); }); }
+function recib(l,pieza,fase){ var r=S.datos.recibidas; return (r&&r[l.folio]&&r[l.folio][pieza]&&r[l.folio][pieza][fase])||0; }
+function sumarRecib(folio,pieza,fase,n){ var r=S.datos.recibidas=S.datos.recibidas||{}; r[folio]=r[folio]||{}; r[folio][pieza]=r[folio][pieza]||{}; r[folio][pieza][fase]=(r[folio][pieza][fase]||0)+n; }
+function llegadaDe(l,pieza){ return llegadas(miArea()).filter(function(x){ return x.pend>0 && x.l.folio===l.folio && (!pieza || x.pieza===pieza); }); }
+/* Tarjeta naranja del inicio: lo que te mandaron y todavía no confirmas. Con "Recibí" se confirma y se quita. */
 function llegadasHtml(){
-  var ar=miArea(), ls=llegadas(ar); if(!ls.length) return '';
+  var ar=miArea(), ls=llegadas(ar).filter(function(x){ return x.conf>0; }); S.porConfirmar=ls; if(!ls.length) return '';
   var de={}; ls.forEach(function(x){ de[x.de]=1; });
-  var tot=ls.reduce(function(a,x){ return a+x.pend; },0);
-  var h='<div class="llegada"><div class="lleg-cab">'+ic('entra',26)+'<div><b>Te mandaron de '+esc(Object.keys(de).join(' y '))+'</b><span>'+tot+' piezas por hacer</span></div></div>';
-  ls.slice(0,6).forEach(function(x){
-    h+='<button class="lleg-fila" onclick="S.verTodo=false;detalle('+x.i+',\''+x.pieza+'\')"><span class="lleg-n">'+x.pend+'</span><span class="lleg-t"><b>'+esc(x.nom)+' · '+esc(corto(x.l.folio))+'</b><small>para '+esc(nomFase(x.fase))+(x.pend<x.llego?' · llegaron '+x.llego:'')+'</small></span>'+ic('chev',18)+'</button>';
+  var tot=ls.reduce(function(a,x){ return a+x.conf; },0);
+  var h='<div class="llegada"><div class="lleg-cab">'+ic('entra',26)+'<div><b>Te mandaron de '+esc(Object.keys(de).join(' y '))+'</b><span>'+tot+' piezas por confirmar</span></div></div>';
+  ls.slice(0,8).forEach(function(x,k){
+    h+='<div class="lleg-fila"><button class="lleg-info" onclick="S.verTodo=false;detalle('+x.i+',\''+x.pieza+'\')"><span class="lleg-n">'+x.conf+'</span><span class="lleg-t"><b>'+esc(x.nom)+' · '+esc(corto(x.l.folio))+'</b><small>para '+esc(nomFase(x.fase))+'</small></span></button>'+
+       '<button class="lleg-ok" onclick="recibi('+k+')">'+ic('check',20,0,3)+'Recibí</button></div>';
   });
-  if(ls.length>6) h+='<div class="sub" style="margin:8px 0 0">…y '+(ls.length-6)+' más en Avance de un lote.</div>';
+  if(ls.length>8) h+='<div class="sub" style="margin:8px 0 0">…y '+(ls.length-8)+' más. Confirma estas primero.</div>';
   return h+'</div>';
+}
+/* Confirmar lo que llegó: "Sí, llegaron N" o escribir otra cantidad */
+function recibi(k, otra){
+  var x=(S.porConfirmar||[])[k]; if(!x) return;
+  var d=document.createElement('div'); d.className='modal'; d.id='modal';
+  d.innerHTML='<div class="caja"><h3>'+(otra?'¿Cuántas llegaron?':'¿Llegaron '+x.conf+' piezas?')+'</h3><p class="sub">Cuéntalas antes de confirmar</p>'+
+    '<div class="linea"><span>Lote</span><b>'+esc(corto(x.l.folio))+'</b></div><div class="linea"><span>Pieza</span><b>'+esc(x.nom)+'</b></div>'+
+    '<div class="linea"><span>Te mandaron ('+esc(x.de)+')</span><b>'+x.conf+'</b></div>'+
+    (otra?'<label>Las que llegaron de verdad</label>'+stepper('cantR',x.conf,true)+'<label>Comentario (opcional)</label><input type="text" id="comR" maxlength="200" placeholder="Ej. 3 venían golpeadas">'+
+          '<p class="sub" style="margin-top:10px">Si no coincide, le llega un aviso al encargado.</p>':'')+
+    '<div class="btnrow"><button class="b2" id="mNo">'+(otra?'Cancelar':'Llegó otra cantidad')+'</button><button class="b3" id="mSi">'+ic('check',22,0,3)+(otra?'Confirmar':'Sí, llegaron '+x.conf)+'</button></div></div>';
+  document.body.appendChild(d);
+  var cerrar=function(){ d.parentNode&&d.parentNode.removeChild(d); };
+  $('mNo').onclick=function(){ cerrar(); if(!otra) recibi(k,true); };
+  $('mSi').onclick=function(){
+    var n=otra?Math.max(0,parseInt($('cantR').value,10)||0):x.conf, com=otra?($('comR').value||'').trim():'';
+    cerrar();
+    var rec={ id:uid(), tipo:'recibido', nombre:S.nombre, ts:new Date().toISOString(), area:miArea(), folio:x.l.folio, pieza:x.pieza, fase:x.envio,
+              enviadas:x.conf, cantidad:n, comentario:com };
+    sumarRecib(x.l.folio,x.pieza,x.envio,x.conf); guardar('datos',S.datos);
+    encolar(rec, 'Recibí '+n+(n!==x.conf?' de '+x.conf:'')+' · '+x.nom+' · '+corto(x.l.folio), 'recibido');
+  };
 }
 function actualizar(){ pantalla('<p>Actualizando…</p>'); cargarDatos(inicio); }
 
@@ -1230,6 +1259,7 @@ function encolar(rec, resumen, tipo){
     .registrar(rec);
 }
 function confirmar(enviado,resumen){
+  if(S.ultimo==='recibido' && enviado){ menu(); return; }
   var h='<div class="ok"><div class="icon" style="color:'+(enviado?'var(--ok)':'var(--y)')+'">'+(enviado?ic('check',80,0,3):ic('phone',72,0,1.6))+'</div><h2>'+(enviado?'¡Listo, registrado!':'Guardado en tu celular')+'</h2>'+
         '<p class="sub">'+esc(resumen)+'</p>'+
         (enviado?'':'<div class="warn">No hay internet. Se va a enviar solo cuando regrese la señal. <b>No lo vuelvas a capturar.</b></div>')+'</div>';
