@@ -19,11 +19,11 @@
      Verde solo para "terminado/enviado" y rojo solo para "atrasado/error". */
   :root{--bg:#EEF2F6;--card:#FFFFFF;--card2:#F4F6F9;--line:#CDD6E0;--tx:#16263A;--mu:#566575;
     --y:#1F5FA8;--yx:#1F5FA8;--yt:#FFFFFF;--azS:#E5EEF9;--nar:#D45F10;--narS:#FFF1E4;
-    --ok:#1D7748;--okbg:#E1F2E8;--red:#BE3326;--redbg:#FBE5E2;--wbg:#FFF1E4;--wtx:#7A3608;--vacio:#E0E6ED;
+    --ok:#1D7748;--okbg:#E1F2E8;--red:#BE3326;--redbg:#FBE5E2;--wbg:#FFF1E4;--wtx:#7A3608;--vacio:#E0E6ED;--amar:#E9B800;--amartx:#7A5D00;
     --a-Corte:#7C8B9D;--a-Lijado:#E8892B;--a-Pintura:#2F74C0;--a-Empacado:#15304F}
   body.oscuro{--bg:#0F1A27;--card:#182637;--card2:#1F3045;--line:#2E415A;--tx:#EEF2F6;--mu:#A2B2C3;
     --y:#3A7DD6;--yx:#7DB1F0;--yt:#FFFFFF;--azS:#1C3554;--nar:#E8701F;--narS:#3A2414;
-    --ok:#5FCF8F;--okbg:#14301F;--red:#FF7B6E;--redbg:#3B1A17;--wbg:#3A2414;--wtx:#FFC28F;--vacio:#2E415A;
+    --ok:#5FCF8F;--okbg:#14301F;--red:#FF7B6E;--redbg:#3B1A17;--wbg:#3A2414;--wtx:#FFC28F;--vacio:#2E415A;--amar:#F5C518;--amartx:#F5C518;
     --a-Corte:#A6B4C4;--a-Lijado:#F2913D;--a-Pintura:#62A0EC;--a-Empacado:#DCE5EF}
   *{box-sizing:border-box}
   body{margin:0;font-family:'Legible',Roboto,system-ui,-apple-system,'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--tx);font-size:17px;line-height:1.45;letter-spacing:.15px;-webkit-tap-highlight-color:transparent}
@@ -84,7 +84,8 @@
   .oc.semana.lista .num{background:var(--ok)}
   /* barras de avance, una por área */
   .barras{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 14px}
-  .barra .bn{display:flex;justify-content:space-between;gap:4px;font-size:13px;color:var(--mu);line-height:1.2}
+  .barra .bn{display:flex;justify-content:space-between;gap:6px;font-size:13px;color:var(--mu);line-height:1.2;white-space:nowrap}
+  .barras.una .barra .bn{font-size:14px}
   .barra .bn b{color:var(--tx)}
   .barra .bt{display:block;height:8px;background:var(--vacio);border-radius:4px;overflow:hidden;margin-top:5px}
   .barra .bt i{display:block;height:100%;border-radius:4px}
@@ -189,14 +190,14 @@
   .opc b{display:flex;align-items:center;gap:10px}
   .opc span{display:block;font-size:14px;color:var(--mu);margin-top:4px}
   .opc.n-rojo,.elegido.n-rojo{border-left:6px solid var(--red)}
-  .opc.n-amarillo,.elegido.n-amarillo{border-left:6px solid var(--a-Lijado)}
+  .opc.n-amarillo,.elegido.n-amarillo{border-left:6px solid var(--amar)}
   .opc.n-verde,.elegido.n-verde{border-left:6px solid var(--ok)}
   .elegido{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
   .elegido span{display:block;font-size:14px;color:var(--mu);margin-top:4px}
   .semaforo{display:flex;align-items:center;gap:10px;margin-top:10px;padding:10px 12px;border-radius:8px;font-weight:700;font-size:16px;background:var(--card2)}
-  .n-rojo .semaforo{color:var(--red)}.n-amarillo .semaforo{color:var(--wtx)}.n-verde .semaforo{color:var(--ok)}
+  .n-rojo .semaforo{color:var(--red)}.n-amarillo .semaforo{color:var(--amartx)}.n-verde .semaforo{color:var(--ok)}
   .dot{display:inline-block;width:12px;height:12px;border-radius:50%;flex:none;vertical-align:-1px}
-  .dot.rojo{background:var(--red)}.dot.amarillo{background:var(--a-Lijado)}.dot.verde{background:var(--ok)}
+  .dot.rojo{background:var(--red)}.dot.amarillo{background:var(--amar)}.dot.verde{background:var(--ok)}
   a{color:var(--yx)}
   input[type=number]{-moz-appearance:textfield;appearance:textfield}
   input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
@@ -216,7 +217,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '3.8';
+var VERSION = '3.9';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -509,7 +510,8 @@ function barrasAreas(a, pct, areas){
 function trackLote(l){
   if(!S.datos.areasFases) return '';
   var a=avanceLote(l); a.Empacado=l.cantidad?Math.min(1,(l.empacadas||0)/l.cantidad):0;
-  return barrasAreas(a,false);
+  var yo=miArea();
+  return barrasAreas(a, false, yo!=='Todas'?[yo]:null);
 }
 /* En el botón de cada pieza: la barra del área de quien registra (o el total de fases si ve todas) */
 function trackPieza(l,pieza){
@@ -518,7 +520,7 @@ function trackPieza(l,pieza){
   var fa = ar==='Todas' ? base : base.filter(function(f){ return areaDeFase(pieza,f)===ar; });
   if(!fa.length) return '';
   var n=fa.filter(function(f){ return base.indexOf(f)<=ci; }).length, p=Math.round(n/fa.length*100);
-  return '<div class="barras una"><div class="barra"><span class="bn">'+(ar==='Todas'?'Fases':esc(ar))+'<b>'+n+' de '+fa.length+'</b></span><span class="bt"><i style="width:'+p+'%;background:'+(ar==='Todas'?'var(--y)':COLOR_AREA[ar])+'"></i></span></div></div>';
+  return '<div class="barras una"><div class="barra"><span class="bn"><b>'+n+' de '+fa.length+'</b></span><span class="bt"><i style="width:'+p+'%;background:'+(ar==='Todas'?'var(--y)':COLOR_AREA[ar])+'"></i></span></div></div>';
 }
 function miArea(){ var a=(S.datos.areaUsuarios||{})[S.nombre]; return (a && AREAS.indexOf(a)>=0) ? a : 'Todas'; }
 /* Área cuyas fases ve en "Avance de un lote": cada quien las de su área; el encargado, las de Corte.
@@ -554,7 +556,7 @@ function barrasAvance(){
   var h='', yo=miArea();
   (S.datos.ocs||[]).forEach(function(oc){
     var a=avancePedido(oc); if(!a.urnas) return;
-    h+='<div class="card avance"><div class="av-tit">Avance del pedido <b>'+esc(oc)+'</b> · '+a.urnas+' urnas</div>'+barras(a,false,yo)+'</div>';
+    h+='<div class="card avance"><div class="av-tit">Avance del pedido <b>'+esc(oc)+'</b> · '+a.urnas+' urnas</div>'+barras(a,false,yo,yo!=='Todas'?[yo]:null)+'</div>';
   });
   return h;
 }
@@ -895,7 +897,7 @@ function detalleFase(i,pieza){
   h+='<label class="paso"><i>1</i>¿Qué pieza?</label><div class="seg piezas"'+(piezasOk.length===3?' style="grid-template-columns:1fr 1fr 1fr"':'')+'>';
   piezasOk.forEach(function(p){
     var base=fasesBase(l,p[0]), a=l.av[p[0]], fin=base.length && a===base[base.length-1];
-    var est=(!a||a==='—')?'sin iniciar':(fin?'✓ terminada':'va en '+nomFase(a));
+    var est=(!a||a==='—')?'sin iniciar':(fin?'✓\u00a0terminada':'va en '+nomFase(a));
     h+='<button class="'+(S.pieza===p[0]?'on':'')+'" onclick="detalleFase('+i+',\''+p[0]+'\')"><b class="pz">'+p[1]+'</b>'+trackPieza(l,p[0])+'<small>'+esc(est)+'</small></button>';
   });
   h+='</div>';
@@ -904,13 +906,13 @@ function detalleFase(i,pieza){
   /* siguiente fase de su área después de la fase en que va la pieza */
   var sug=lista.filter(function(f){ return base.indexOf(f)>ci && disponible(l,S.pieza,f)>0; })[0]||null;
   var yaTodo=!sug && lista.length>0 && !ORDEN_BLOQUEO;
-  S.sinFase=!sug && !yaTodo;
+  S.sinFase=!sug && !yaTodo; S.sug=sug;
   h+='<label class="paso"><i>2</i>¿Qué fase terminaste?</label>';
   if(sug){
     var d0=disponible(l,S.pieza,sug);
     h+='<div class="fasebox" id="faseBox"><span class="ck">'+ic('check',24,0,3)+'</span><div><span>La siguiente</span><b id="faseNom">'+esc(nomFase(sug))+'</b>'+
        (isFinite(d0)?'<small id="faseDisp">Puedes registrar hasta '+d0+' piezas</small>':'')+'</div></div>'+
-       '<button class="otra" id="otraBtn" onclick="otraFase()">Elegir otra fase '+ic('down',18,0,3)+'</button>';
+       '';
   } else if(yaTodo){
     h+='<div class="card">'+(areaFases()!=='Todas'?'Tu área ya registró todas sus fases de esta pieza.':'Esta pieza ya tiene registradas todas sus fases.')+' Si es otra tanda, elige la fase:</div>';
   } else {
@@ -923,6 +925,7 @@ function detalleFase(i,pieza){
   lista.forEach(function(f){ var d=disponible(l,S.pieza,f);
     h+='<option value="'+esc(f)+'"'+(f===(sug||(yaTodo?act:null))?' selected':'')+(d>0?'':' disabled')+'>'+esc(nomFase(f))+(isFinite(d)?(d>0?' — hasta '+d:' — bloqueada: '+(hecho(l,S.pieza,f)>=l.cantidad?'ya completa':'falta '+nomFase(previa(l,S.pieza,f)||''))):'')+'</option>'; });
   h+='</select>';
+  if(sug) h+='<button class="otra" id="otraBtn" onclick="otraFase()">Elegir otra fase '+ic('down',18,0,3)+'</button>';
   if(areaFases()!=='Todas') h+='<div class="sub" style="margin-top:6px">Solo ves las fases de <b>'+esc(areaFases())+'</b>.</div>';
   if(S.sinFase){ pantalla(h); return; }
   h+='<label class="paso"><i>3</i>¿Cuántas pasaron?</label>'+stepper('cant',0,true)+
@@ -935,7 +938,19 @@ function detalleFase(i,pieza){
   S.alCambiar=avisoCant; $('cant').oninput=avisoCant;
 }
 function $fase0(sug,act,lista){ return sug||act||lista[0]||''; }
-function otraFase(){ $('fase').className=''; if($('faseBox')) $('faseBox').className='hide'; $('otraBtn').className='hide'; if($('fase').focus) $('fase').focus(); }
+/* "Elegir otra fase" abre la lista; tocarlo otra vez la cierra y regresa a la fase sugerida */
+function otraFase(){
+  var abierta=$('fase').className!=='hide';
+  if(abierta){
+    $('fase').className='hide'; if($('faseBox')) $('faseBox').className='fasebox';
+    if(S.sug){ $('fase').value=S.sug; faseCambio(); }
+    $('otraBtn').innerHTML='Elegir otra fase '+ic('down',18,0,3);
+  } else {
+    $('fase').className=''; if($('faseBox')) $('faseBox').className='hide';
+    $('otraBtn').innerHTML=ic('back',18,0,3)+'Regresar a la siguiente fase';
+    if($('fase').focus) $('fase').focus();
+  }
+}
 function faseCambio(){ var f=$('fase').value; if($('faseNom')) $('faseNom').textContent=nomFase(f); if($('btnFase')) $('btnFase').textContent=nomFase(f); if($('todoBtn')) $('todoBtn').textContent=textoTodo(f); avisoCant(); }
 function maxFase(f){ var d=disponible(S.lote,S.pieza,f); return isFinite(d)?d:S.lote.cantidad; }
 function textoTodo(f){ var m=maxFase(f); return m>=S.lote.cantidad?'Todo el lote ('+S.lote.cantidad+')':'Todas las que se pueden ('+m+')'; }
@@ -1314,8 +1329,8 @@ function avanceGrupo(ls){
   if(t) Object.keys(r).forEach(function(k){ r[k]/=t; });
   r.urnas=t; return r;
 }
-function barras(a, chico, yo){
-  return AREAS.concat(['Empacado']).map(function(k){
+function barras(a, chico, yo, solo){
+  return (solo||AREAS.concat(['Empacado'])).map(function(k){
     var p=Math.round(a[k]*100);
     return '<div class="av-fila'+(k===yo?' yo':'')+'"'+(chico?' style="font-size:12px;margin:3px 0"':'')+'><span class="av-nom">'+k+'</span><span class="av-barra"'+(chico?' style="height:9px"':'')+'><i style="width:'+p+'%;background:'+COLOR_AREA[k]+'"></i></span><span class="av-pct">'+p+'%</span></div>';
   }).join('');
