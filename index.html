@@ -243,7 +243,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.3';
+var VERSION = '4.4';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -607,7 +607,7 @@ function llegadasHtml(){
   var tot=ls.reduce(function(a,x){ return a+x.conf; },0);
   var h='<div class="llegada"><div class="lleg-cab">'+ic('entra',26)+'<div><b>Te mandaron de '+esc(Object.keys(de).join(' y '))+'</b><span>'+tot+' piezas por confirmar</span></div></div>';
   ls.slice(0,8).forEach(function(x,k){
-    h+='<div class="lleg-fila"><button class="lleg-info" onclick="S.verTodo=false;detalle('+x.i+',\''+x.pieza+'\')"><span class="lleg-n">'+x.conf+'</span><span class="lleg-t"><b>'+esc(x.nom)+' · '+esc(corto(x.l.folio))+'</b><small>para '+esc(nomFase(x.fase))+'</small></span></button>'+
+    h+='<div class="lleg-fila"><button class="lleg-info" onclick="S.verListos=false;detalle('+x.i+',\''+x.pieza+'\')"><span class="lleg-n">'+x.conf+'</span><span class="lleg-t"><b>'+esc(x.nom)+' · '+esc(corto(x.l.folio))+'</b><small>para '+esc(nomFase(x.fase))+'</small></span></button>'+
        '<button class="lleg-ok" onclick="recibi('+k+')">'+ic('check',20,0,3)+'Recibí</button></div>';
   });
   if(ls.length>8) h+='<div class="sub" style="margin:8px 0 0">…y '+(ls.length-8)+' más. Confirma estas primero.</div>';
@@ -704,7 +704,9 @@ function lotes(filtro){
   filtro=(filtro||'').toLowerCase();
   var h='<button class="back" onclick="menu()">'+ic('back',18,0,3)+'Inicio</button>'+
         '<h2>Elige tu lote</h2>'+
-        (miArea()!=='Todas'?'<div class="seg"><button class="'+(S.verTodo?'':'on')+'" onclick="S.verTodo=false;lotes()">Míos · '+miArea()+'</button><button class="'+(S.verTodo?'on':'')+'" onclick="S.verTodo=true;lotes()">Todos</button></div>':'')+
+        (miArea()!=='Todas'?(function(){ var a=miArea(), n=0; S.datos.lotes.forEach(function(l){ if(avanceLote(l)[a]>=1) n++; });
+          return '<div class="seg"><button class="'+(S.verListos?'':'on')+'" onclick="S.verListos=false;lotes()">Pendientes ('+(S.datos.lotes.length-n)+')</button>'+
+                 '<button class="'+(S.verListos?'on':'')+'" onclick="S.verListos=true;lotes()">Terminados ('+n+')</button></div>'; })():'')+
         '<input type="text" id="busca" aria-label="Buscar lote" placeholder="Busca el nombre de la tarjeta" value="'+esc(filtro)+'" oninput="filtrarLotes(this.value)">'+
         '<div id="listaLotes" style="margin-top:4px"></div>'+
         (S.datos.renglones?'<div class="fijo"><div class="btnrow"><button class="b2" onclick="empacado()">'+ic('pkg')+'Empacado</button></div></div>':'');
@@ -715,7 +717,8 @@ function filtrarLotes(f){
   var grupos={}, orden=[], h='';
   S.datos.lotes.forEach(function(l,i){
     var t=norm(l.folio); if(f.length && !f.every(function(w){ return t.indexOf(w)>=0; })) return;
-    if(miArea()!=='Todas' && !S.verTodo && avanceLote(l)[miArea()]>=1) return;
+    /* Pendientes = a mi área le falta algo en ese lote; Terminados = mi área ya hizo todas sus fases */
+    if(miArea()!=='Todas' && (avanceLote(l)[miArea()]>=1) !== !!S.verListos) return;
     var k=l.oc+'|'+l.semana; if(!grupos[k]){ grupos[k]=[]; orden.push(k); } grupos[k].push(i);
   });
   orden.sort(function(a,b){ var A=a.split('|'),B=b.split('|'); return A[0]===B[0] ? (Number(A[1])||0)-(Number(B[1])||0) : (A[0]<B[0]?-1:1); });
@@ -746,7 +749,7 @@ function filtrarLotes(f){
     if(!activas.length) h+='<div class="card">Todas las semanas de estos lotes ya están terminadas.</div>';
     h+='<details class="hechas"><summary>'+ic('check',20,0,3)+'Semanas terminadas ('+listas.length+') <small>toca para ver</small></summary>'+listas.map(function(k){ return pintarSemana(k,true); }).join('')+'</details>';
   }
-  $('listaLotes').innerHTML = h || (miArea()!=='Todas' && !S.verTodo ? '<div class="card">No hay lotes pendientes para <b>'+miArea()+'</b>. Toca <b>Todos</b> para ver el resto.</div>' : '<div class="card">No hay lotes con ese nombre. Revisa que el pedido esté <b>Activo</b> o toca "Actualizar datos".</div>');
+  $('listaLotes').innerHTML = h || (miArea()!=='Todas' ? (S.verListos ? '<div class="card">Todavía no hay lotes terminados por <b>'+miArea()+'</b>.</div>' : '<div class="card">No hay lotes pendientes para <b>'+miArea()+'</b>. Los que ya terminaste están en <b>Terminados</b>.</div>') : '<div class="card">No hay lotes con ese nombre. Revisa que el pedido esté <b>Activo</b> o toca "Actualizar datos".</div>');
 }
 
 /* ---------- empacado ---------- */
