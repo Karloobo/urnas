@@ -118,6 +118,19 @@
   .lote .mini em{font-style:normal;margin-right:8px}
   .oc.pedido{font-size:14px;color:#1c4587;margin-top:16px}
   .oc.semana{background:#e6f1fb;color:#0c447c;padding:10px 14px;border-radius:10px;margin:14px 0 8px;font-size:20px;letter-spacing:.5px;border-left:6px solid #1c4587}
+  .lotebox{background:#1c4587;color:#fff;border-radius:12px;padding:12px 14px;margin:6px 0 4px}
+  .lotebox .lb-nom{font-size:20px;font-weight:bold}
+  .lotebox .lb-sem{font-size:14px;opacity:.9;margin-top:2px;letter-spacing:.3px}
+  .seg.piezas button small{display:block;font-weight:normal;font-size:11px;color:#6b7280;margin-top:3px}
+  .seg.piezas button.on small{color:#dbeafe}
+  .fasebox{border:2px solid #38761d;background:#e8f5e1;border-radius:12px;padding:10px 14px}
+  .fasebox span{display:block;font-size:12px;color:#38761d;font-weight:bold;letter-spacing:.3px}
+  .fasebox b{font-size:22px;color:#1f3d10}
+  .fasebox.otra{border-color:#9ca3af;background:#f3f4f6}
+  .todo{width:100%;margin-top:8px;padding:12px;border-radius:10px;border:2px dashed #1c4587;background:#fff;color:#1c4587;font-weight:bold;font-size:16px}
+  .oscuro .lotebox{background:#1e3a5f}
+  .oscuro .fasebox{background:#14301a;border-color:#4ade80}.oscuro .fasebox span{color:#86efac}.oscuro .fasebox b{color:#dcfce7}
+  .oscuro .todo{background:#1f2937;color:#93c5fd;border-color:#93c5fd}
   .lote .tag{display:inline-block;margin:0 0 0 8px;vertical-align:middle}
   .oc.semana span{font-weight:normal;color:#4b5563;font-size:14px;display:block;margin-top:2px;letter-spacing:0}
   .oscuro .oc.semana{border-left-color:#93c5fd}
@@ -149,7 +162,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '3.0';
+var VERSION = '3.1';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -727,30 +740,50 @@ function terminarArea(i,k){
     { titulo:'¿Terminaste '+o.area+'?', sub:'Revisa que sea el lote correcto', si:'✔ Sí, terminé' });
 }
 function detalleFase(i,pieza){
-  S.lote=S.datos.lotes[i]; var l=S.lote;
+  S.lote=S.datos.lotes[i]; var l=S.lote; S.loteIdx=i;
   var piezasOk=PIEZAS.filter(function(p){ if(p[0]==='Techo' && !l.techo) return false;
     if(miArea()==='Todas' || S.verFases || !S.datos.areasFases) return true;
     return (S.datos.fases[p[0]]||[]).some(function(f){ return areaDeFase(p[0],f)===miArea(); }); });
   if(!piezasOk.length) piezasOk=PIEZAS.filter(function(p){ return !(p[0]==='Techo' && !l.techo); });
   S.pieza=pieza||S.pieza||piezasOk[0][0];
   if(!piezasOk.some(function(p){ return p[0]===S.pieza; })) S.pieza=piezasOk[0][0];
-  var h='<button class="back" onclick="lotes()">← Lotes</button><h2>'+esc(corto(l.folio))+'</h2><p class="sub">'+l.cantidad+' piezas · pedido '+esc(l.oc)+'</p>';
-  h+='<label>¿Qué pieza?</label><div class="seg">';
+  var h='<button class="back" onclick="lotes()">← Lotes</button>'+
+    '<div class="lotebox"><div class="lb-nom">'+esc(corto(l.folio))+'</div><div class="lb-sem">SEMANA '+esc(l.semana)+' · '+l.cantidad+' piezas · '+esc(l.oc)+'</div></div>';
+  h+='<label>1. ¿Qué pieza?</label><div class="seg piezas">';
   piezasOk.forEach(function(p){
-    h+='<button class="'+(S.pieza===p[0]?'on':'')+'" onclick="detalleFase('+i+',\''+p[0]+'\')">'+p[1]+'</button>';
+    var base=fasesBase(l,p[0]), a=l.av[p[0]], fin=base.length && a===base[base.length-1];
+    var est=(!a||a==='—')?'sin iniciar':(fin?'✔ terminada':'va en '+nomFase(a));
+    h+='<button class="'+(S.pieza===p[0]?'on':'')+'" onclick="detalleFase('+i+',\''+p[0]+'\')">'+p[1]+'<small>'+esc(est)+'</small></button>';
   });
   h+='</div>';
-  var lista=fasesDe(l,S.pieza), sug=sugerida(l,S.pieza), act=l.av[S.pieza];
-  h+='<label>Fase que terminaste</label><select id="fase">';
-  lista.forEach(function(f){ h+='<option value="'+esc(f)+'"'+(f===sug?' selected':'')+'>'+esc(nomFase(f))+'</option>'; });
-  h+='</select><div class="sug">Va en: '+esc(act&&act!=='—'?nomFase(act):'sin iniciar')+' → sugerida la siguiente</div>';
-  if(miArea()!=='Todas' && S.datos.areasFases) h+='<button class="link" onclick="S.verFases=!S.verFases;detalleFase('+i+')">'+(S.verFases?'Ver solo fases de '+miArea():'Ver todas las fases')+'</button>';
-  h+='<label>¿Cuántas piezas pasaron?</label>'+stepper('cant',0);
-  h+='<label>¿Se dañó alguna?</label>'+stepper('dan',0);
+  var lista=fasesDe(l,S.pieza), base=fasesBase(l,S.pieza), act=l.av[S.pieza], ci=base.indexOf(act);
+  var termino = base.length && ci===base.length-1;
+  var sug=termino?null:sugerida(l,S.pieza);
+  h+='<label>2. ¿Qué fase terminaste?</label>';
+  if(sug){
+    h+='<div class="fasebox" id="faseBox"><span>Siguiente fase</span><b id="faseNom">'+esc(nomFase(sug))+'</b></div>'+
+       '<button class="link" id="otraBtn" onclick="otraFase()">Elegir otra fase ▾</button>';
+  } else h+='<div class="card">✔ Esta pieza ya tiene registradas todas sus fases. Si es otra tanda, elige la fase:</div>';
+  h+='<select id="fase" class="'+(sug?'hide':'')+'" onchange="faseCambio()">';
+  lista.forEach(function(f){ h+='<option value="'+esc(f)+'"'+(f===(sug||act)?' selected':'')+'>'+esc(nomFase(f))+'</option>'; });
+  h+='</select>';
+  if(miArea()!=='Todas' && S.datos.areasFases) h+='<button class="link" onclick="S.verFases=!S.verFases;detalleFase('+i+')">'+(S.verFases?'Ver solo fases de '+miArea():'Ver fases de todas las áreas')+'</button>';
+  h+='<label>3. ¿Cuántas piezas pasaron?</label>'+stepper('cant',0)+
+     '<button class="todo" onclick="todoLote()">Todo el lote ('+l.cantidad+')</button><div id="cantAviso"></div>';
+  h+='<label>¿Se dañó alguna? (si no, déjalo en 0)</label>'+stepper('dan',0);
   h+='<label>Comentario (opcional)</label><input type="text" id="com" maxlength="200">';
   if(S.papel) h+=quienHtml()+'<label>Fecha y hora en que se hizo (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
-  h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarAvance()">✔ Registrar</button></div>';
+  h+='<div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarAvance()">✔ Registrar: <span id="btnFase">'+esc(nomFase($fase0(sug,act,lista)))+'</span></button></div>';
   pantalla(h);
+  S.alCambiar=avisoCant; $('cant').oninput=avisoCant;
+}
+function $fase0(sug,act,lista){ return sug||act||lista[0]||''; }
+function otraFase(){ $('fase').className=''; if($('faseBox')) $('faseBox').className='hide'; $('otraBtn').className='hide'; if($('fase').focus) $('fase').focus(); }
+function faseCambio(){ var f=$('fase').value; if($('faseNom')) $('faseNom').textContent=nomFase(f); if($('btnFase')) $('btnFase').textContent=nomFase(f); }
+function todoLote(){ $('cant').value=S.lote.cantidad; avisoCant(); }
+function avisoCant(){
+  var el=$('cantAviso'); if(!el) return; var c=parseInt($('cant').value,10)||0;
+  el.innerHTML = c>S.lote.cantidad ? '<div class="warn">⚠ Pusiste '+c+' y el lote es de '+S.lote.cantidad+'.</div>' : '';
 }
 function stepper(id,v){
   return '<div class="step"><button onclick="paso(\''+id+'\',-1)">−</button><input type="number" inputmode="decimal" step="any" id="'+id+'" value="'+v+'" min="0"><button onclick="paso(\''+id+'\',1)">+</button></div>';
@@ -763,15 +796,24 @@ function fechaRegistro(){
 
 function guardarAvance(){
   var cant=parseInt($('cant').value,10)||0, dan=parseInt($('dan').value,10)||0;
-  if(cant<=0){ $('err').textContent='Escribe cuántas piezas pasaron (más de 0).'; return; }
-  var pz=(PIEZAS.filter(function(p){ return p[0]===S.pieza; })[0]||[0,S.pieza])[1];
-  var rec={ id:uid(), tipo:'avance', nombre:S.nombre, ts:fechaRegistro(), folio:S.lote.folio, pieza:S.pieza,
-            fase:$('fase').value, cantidad:cant, danadas:dan, comentario:$('com').value.trim() };
-  preguntar([['Lote',corto(S.lote.folio)],['Pieza',pz],['Fase',nomFase(rec.fase)],['Piezas que pasaron',cant]].concat(dan?[['Dañadas',dan]]:[]),
-    [cant>S.lote.cantidad?'Pusiste '+cant+' y el lote es de '+S.lote.cantidad+'.':''],
-    function(){ encolar(rec, corto(S.lote.folio)+' · '+nomFase(rec.fase), 'avance'); });
+  if(cant<=0){ $('err').textContent='Escribe cuántas piezas pasaron (más de 0) o toca "Todo el lote".'; return; }
+  var l=S.lote, pz=(PIEZAS.filter(function(p){ return p[0]===S.pieza; })[0]||[0,S.pieza])[1];
+  var fase=$('fase').value;
+  var rec={ id:uid(), tipo:'avance', nombre:S.nombre, ts:fechaRegistro(), folio:l.folio, pieza:S.pieza,
+            fase:fase, cantidad:cant, danadas:dan, comentario:$('com').value.trim() };
+  /* Revisiones para evitar errores comunes */
+  var base=fasesBase(l,S.pieza), act=l.av[S.pieza], ci=base.indexOf(act), fi=base.indexOf(fase), av=[];
+  if(cant>l.cantidad) av.push('Pusiste '+cant+' y el lote es de '+l.cantidad+'.');
+  if(ci>=0 && fi>=0 && fi<=ci) av.push(nomFase(fase)+' ya estaba registrada (esta pieza va en '+nomFase(act)+'). ¿Es otra tanda del mismo lote?');
+  if(fi>ci+1){
+    var area=areaDeFase(S.pieza,fase), falta=base.slice(ci+1,fi);
+    var txt=falta.slice(0,4).map(function(f){ var a=areaDeFase(S.pieza,f); return nomFase(f)+(a&&area&&a!==area?' ('+a+')':''); }).join(', ')+(falta.length>4?' y '+(falta.length-4)+' más':'');
+    av.push('Todavía no se registra: '+txt+'. ¿Seguro que ya terminaste '+nomFase(fase)+'?');
+  }
+  if(dan>cant) av.push('Pusiste más dañadas ('+dan+') que piezas ('+cant+').');
+  preguntar([['Lote',corto(l.folio)+' · Semana '+l.semana],['Pieza',pz],['Fase que terminó',nomFase(fase)],['Piezas que pasaron',cant]].concat(dan?[['Dañadas',dan]]:[]),
+    av, function(){ encolar(rec, corto(l.folio)+' · '+pz+' · '+nomFase(fase)+' · '+cant, 'avance'); });
 }
-
 /* ---------- buscador de material/piezas (busca escribiendo o abre la lista completa) ---------- */
 var NIVEL={ 'CRÍTICO':['rojo','🔴','Queda poco'], 'POR AGOTARSE':['amarillo','🟡','Ya casi se acaba'], 'ESTABLE':['verde','🟢','Hay suficiente'] };
 var NIVEL_EST={ 'CORTAR YA':['rojo','🔴','Hay que cortar ya'], 'CORTAR PRONTO':['amarillo','🟡','Cortar pronto'], 'OK':['verde','🟢','Hay suficiente'] };
