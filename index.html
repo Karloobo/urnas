@@ -149,7 +149,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '2.8';
+var VERSION = '2.9';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -680,7 +680,52 @@ function sugerida(l,pieza){
   return lista[lista.length-1];
 }
 
+/* ---------- registro rápido: "Terminé <área>" ----------
+   El trabajador solo dice que terminó su área en el lote; la app calcula hasta qué fase llegó cada pieza:
+   desde la fase en que va, el siguiente bloque seguido de fases de esa área (pestaña Áreas). */
+function fasesBase(l,pieza){
+  if(pieza==='Techo' && !l.techo) return [];
+  var lista=S.datos.fases[pieza]||[];
+  if(pieza!=='Techo' && !l.techo) lista=lista.filter(function(f){ return !esFaseTecho(pieza,f); });
+  if(S.datos.faseEmpaque) lista=lista.filter(function(f){ return f!==S.datos.faseEmpaque; });
+  return lista;
+}
+function bloque(l,pieza,area){
+  var lista=fasesBase(l,pieza), j=lista.indexOf(l.av[pieza])+1;
+  while(j<lista.length && areaDeFase(pieza,lista[j])!==area) j++;
+  if(j>=lista.length) return null;
+  var k=j; while(k+1<lista.length && areaDeFase(pieza,lista[k+1])===area) k++;
+  return {desde:lista[j], hasta:lista[k], n:k-j+1};
+}
+function itemsArea(l,area){
+  return PIEZAS.map(function(p){ var b=bloque(l,p[0],area); return b?{pieza:p[0], nom:p[1], b:b}:null; }).filter(Boolean);
+}
 function detalle(i,pieza){
+  if(pieza || !S.datos.areasFases) return detalleFase(i,pieza);
+  S.lote=S.datos.lotes[i]; var l=S.lote;
+  var areas=miArea()!=='Todas'?[miArea()]:AREAS;
+  var ops=areas.map(function(a){ return {area:a, items:itemsArea(l,a)}; }).filter(function(o){ return o.items.length; });
+  S.rapido=ops;
+  var h='<button class="back" onclick="lotes()">← Lotes</button><h2>'+esc(corto(l.folio))+'</h2><p class="sub">'+l.cantidad+' piezas · pedido '+esc(l.oc)+' · '+tagEstado(l.estado)+'</p>';
+  if(!ops.length) h+='<div class="card">✅ '+(miArea()!=='Todas'?'Tu área ya terminó todo lo de este lote.':'Este lote ya pasó por todas las fases.')+'</div>';
+  ops.forEach(function(o,k){
+    h+='<button class="big b3 rapido" onclick="terminarArea('+i+','+k+')">✔<span>Terminé '+esc(o.area)+' · '+l.cantidad+' piezas<small>'+
+       o.items.map(function(x){ return esc(x.nom)+': '+esc(x.b.n>1?nomFase(x.b.desde)+' → '+nomFase(x.b.hasta):nomFase(x.b.hasta)); }).join('<br>')+'</small></span></button>';
+  });
+  if(S.papel) h+=quienHtml()+'<label>Fecha y hora en que se hizo (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
+  h+='<button class="link" style="margin-top:14px" onclick="detalleFase('+i+')">Registrar una fase en específico (otra cantidad o piezas dañadas)</button>';
+  pantalla(h);
+}
+function terminarArea(i,k){
+  var l=S.datos.lotes[i], o=S.rapido[k]; if(!o) return;
+  var items=o.items.map(function(x){ return {pieza:x.pieza, fase:x.b.hasta}; });
+  var rec={ id:uid(), tipo:'avance', nombre:S.nombre, ts:fechaRegistro(), folio:l.folio, area:o.area, cantidad:l.cantidad,
+            items:items, pieza:items[0].pieza, fase:items[0].fase, comentario:'' };
+  preguntar([['Lote',corto(l.folio)],['Terminé',o.area],['Piezas',l.cantidad]].concat(o.items.map(function(x){ return [x.nom,'hasta '+nomFase(x.b.hasta)]; })), [],
+    function(){ encolar(rec, corto(l.folio)+' · Terminé '+o.area+' · '+l.cantidad+' piezas', 'avance'); },
+    { titulo:'¿Terminaste '+o.area+'?', sub:'Revisa que sea el lote correcto', si:'✔ Sí, terminé' });
+}
+function detalleFase(i,pieza){
   S.lote=S.datos.lotes[i]; var l=S.lote;
   var piezasOk=PIEZAS.filter(function(p){ if(p[0]==='Techo' && !l.techo) return false;
     if(miArea()==='Todas' || S.verFases || !S.datos.areasFases) return true;
@@ -688,17 +733,17 @@ function detalle(i,pieza){
   if(!piezasOk.length) piezasOk=PIEZAS.filter(function(p){ return !(p[0]==='Techo' && !l.techo); });
   S.pieza=pieza||S.pieza||piezasOk[0][0];
   if(!piezasOk.some(function(p){ return p[0]===S.pieza; })) S.pieza=piezasOk[0][0];
-  var h='<button class="back" onclick="lotes()">← Lotes</button><h2>'+esc(corto(l.folio))+'</h2><p class="sub">'+l.cantidad+' piezas · pedido '+esc(l.oc)+'</p>';
+  var h='<button class="back" onclick="'+(S.datos.areasFases?'detalle('+i+')':'lotes()')+'">← '+(S.datos.areasFases?'Volver':'Lotes')+'</button><h2>'+esc(corto(l.folio))+'</h2><p class="sub">'+l.cantidad+' piezas · pedido '+esc(l.oc)+'</p>';
   h+='<label>¿Qué pieza?</label><div class="seg">';
   piezasOk.forEach(function(p){
-    h+='<button class="'+(S.pieza===p[0]?'on':'')+'" onclick="detalle('+i+',\''+p[0]+'\')">'+p[1]+'</button>';
+    h+='<button class="'+(S.pieza===p[0]?'on':'')+'" onclick="detalleFase('+i+',\''+p[0]+'\')">'+p[1]+'</button>';
   });
   h+='</div>';
   var lista=fasesDe(l,S.pieza), sug=sugerida(l,S.pieza), act=l.av[S.pieza];
   h+='<label>Fase que terminaste</label><select id="fase">';
   lista.forEach(function(f){ h+='<option value="'+esc(f)+'"'+(f===sug?' selected':'')+'>'+esc(nomFase(f))+'</option>'; });
   h+='</select><div class="sug">Va en: '+esc(act&&act!=='—'?nomFase(act):'sin iniciar')+' → sugerida la siguiente</div>';
-  if(miArea()!=='Todas' && S.datos.areasFases) h+='<button class="link" onclick="S.verFases=!S.verFases;detalle('+i+')">'+(S.verFases?'Ver solo fases de '+miArea():'Ver todas las fases')+'</button>';
+  if(miArea()!=='Todas' && S.datos.areasFases) h+='<button class="link" onclick="S.verFases=!S.verFases;detalleFase('+i+')">'+(S.verFases?'Ver solo fases de '+miArea():'Ver todas las fases')+'</button>';
   h+='<label>¿Cuántas piezas pasaron?</label>'+stepper('cant',0);
   h+='<label>¿Se dañó alguna?</label>'+stepper('dan',0);
   h+='<label>Comentario (opcional)</label><input type="text" id="com" maxlength="200">';
@@ -871,7 +916,7 @@ function encolar(rec, resumen, tipo){
   if(S.papel && $('quien') && $('quien').value && $('quien').value!==S.nombre){ rec.capturo=S.nombre; rec.nombre=$('quien').value; resumen=rec.nombre+' · '+resumen; }
   if(S.firma) rec.firma=S.firma;
   var c=cola(); c.push(rec); setCola(c); histAgregar(rec,resumen);
-  if(rec.tipo==='avance') avanzarLocal(rec.folio,rec.pieza,rec.fase);
+  if(rec.tipo==='avance') (rec.items||[{pieza:rec.pieza,fase:rec.fase}]).forEach(function(x){ avanzarLocal(rec.folio,x.pieza,x.fase); });
   S.ultimo=tipo;
   pantalla('<div class="ok"><div class="icon">⏳</div><h2>Enviando…</h2><p class="sub">'+esc(resumen)+'</p></div>');
   if(!hayScript()){ confirmar(false,resumen); return; }
@@ -889,7 +934,7 @@ function confirmar(enviado,resumen){
         '<p class="sub">'+esc(resumen)+'</p>'+
         (enviado?'':'<div class="warn">No hay internet. Se va a enviar solo cuando regrese la señal. <b>No lo vuelvas a capturar.</b></div>')+'</div>';
   var i=S.lote?S.datos.lotes.map(function(x){return x.folio;}).indexOf(S.lote.folio):-1;
-  if(S.ultimo==='avance' && i>=0){ h+='<button class="big b1" onclick="detalle('+i+')">Registrar otra fase de este lote</button><button class="big b2" onclick="lotes()">Otro lote</button>'; }
+  if(S.ultimo==='avance' && i>=0){ h+='<button class="big b1" onclick="detalle('+i+')">Volver a este lote</button><button class="big b2" onclick="lotes()">Otro lote</button>'; }
   else if(S.ultimo==='estante'){ h+='<button class="big b1" onclick="estante()">Tomé otra pieza</button>'; }
   else if(S.ultimo==='corte'){ h+='<button class="big b1" onclick="corte()">Corté otra pieza</button>'; }
   else if(S.ultimo==='empacado'){ h+='<button class="big b1" onclick="empacado()">Registrar otro empacado</button>'; }
