@@ -117,8 +117,10 @@
   .lote .mini{font-size:12px;margin-top:4px}
   .lote .mini em{font-style:normal;margin-right:8px}
   .oc.pedido{font-size:14px;color:#1c4587;margin-top:16px}
-  .oc.semana{background:#e6f1fb;color:#0c447c;padding:6px 10px;border-radius:8px;margin:8px 0 6px}
-  .oc.semana span{font-weight:normal;color:#4b5563}
+  .oc.semana{background:#e6f1fb;color:#0c447c;padding:10px 14px;border-radius:10px;margin:14px 0 8px;font-size:20px;letter-spacing:.5px;border-left:6px solid #1c4587}
+  .lote .tag{display:inline-block;margin:0 0 0 8px;vertical-align:middle}
+  .oc.semana span{font-weight:normal;color:#4b5563;font-size:14px;display:block;margin-top:2px;letter-spacing:0}
+  .oscuro .oc.semana{border-left-color:#93c5fd}
   .pista{margin-top:10px}
   .ok-lote{background:#d9ead3;color:#274e13;padding:10px 12px;border-radius:12px;font-size:15px}
   .ok-lote.parcial{background:#fff2cc;color:#7f6000}
@@ -147,7 +149,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '2.7';
+var VERSION = '2.8';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -456,14 +458,11 @@ function filtrarLotes(f){
     var p=k.split('|'), ids=grupos[k], tot=0, emp=0;
     ids.forEach(function(i){ tot+=S.datos.lotes[i].cantidad; emp+=Math.min(S.datos.lotes[i].empacadas||0,S.datos.lotes[i].cantidad); });
     if(p[0]!==ocAnt){ h+='<div class="oc pedido">PEDIDO '+esc(p[0])+'</div>'; ocAnt=p[0]; }
-    h+='<div class="oc semana">SEMANA '+esc(p[1])+' <span>· '+tot+' urnas · empacadas '+emp+'</span></div>';
+    h+='<div class="oc semana">SEMANA '+esc(p[1])+'<span>'+tot+' urnas · empacadas '+emp+'</span></div>';
     ids.forEach(function(i){
-      var l=S.datos.lotes[i], av=[];
-      PIEZAS.forEach(function(pz){ var v=l.av[pz[0]]; if(v && v!=='—' && v!=='No aplica') av.push(pz[1]+': '+nomFase(v)); });
-      var al=S.datos.areasFases?avanceLote(l):null;
+      var l=S.datos.lotes[i];
       h+='<button class="lote" onclick="detalle('+i+')"><b>'+esc(corto(l.folio))+'</b>'+tagEstado(l.estado)+
-         '<span>'+l.cantidad+' piezas'+(l.empacadas?' · empacadas '+Math.min(l.empacadas,l.cantidad):'')+'</span><span>'+(av.length?esc(av.join(' · ')):'Sin avance registrado')+'</span>'+
-         (al?'<span class="mini">'+AREAS.map(function(k){ return '<em style="color:'+COLOR_AREA[k]+'">'+k+' '+Math.round(al[k]*100)+'%</em>'; }).join(' ')+'</span>':'')+'</button>';
+         '<span>'+l.cantidad+' piezas</span></button>';
     });
   });
   $('listaLotes').innerHTML = h || (miArea()!=='Todas' && !S.verTodo ? '<div class="card">🎉 No hay lotes pendientes para <b>'+miArea()+'</b>. Toca <b>Todos</b> para ver el resto.</div>' : '<div class="card">No hay lotes con ese nombre. Revisa que el pedido esté <b>Activo</b> o toca "Actualizar datos".</div>');
