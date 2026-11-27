@@ -228,6 +228,9 @@
   input[type=date]{width:100%;font:inherit;color:var(--tx);padding:14px;border:2px solid var(--line);border-radius:10px;background:var(--card);min-height:54px}
   .aviso-corto{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#15304F;color:#fff;padding:12px 18px;border-radius:12px;font-weight:700;font-size:15px;z-index:60;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;text-align:center}
   .aviso-corto.ver{opacity:1}
+  .combo-op{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:16px;font-weight:700;color:var(--tx);text-transform:none;letter-spacing:0}
+  .combo-op input{width:24px;height:24px}
+  .ok-lote small{display:block;margin-top:4px}
   .hide{display:none}
   .ver{font-size:12px;color:var(--mu);text-align:center;margin-top:14px}
 </style>
@@ -243,7 +246,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.4';
+var VERSION = '4.5';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -1107,7 +1110,7 @@ function avisoCant(){
 function stepper(id,v,grande,decimal){
   return '<div class="step'+(grande?' grande':'')+'"><button aria-label="Menos" onclick="paso(\''+id+'\',-1)">'+ic('minus',28)+'</button><input type="number" '+(decimal?'inputmode="decimal" step="any"':'inputmode="numeric" pattern="[0-9]*" step="1"')+' id="'+id+'" value="'+v+'" min="0"><button aria-label="Más" onclick="paso(\''+id+'\',1)">'+ic('plus',28)+'</button></div>';
 }
-function paso(id,d){ var e=$(id); e.value=Math.max(0,Math.round(((parseFloat(e.value)||0)+d)*100)/100); if(S.alCambiar) S.alCambiar(); }
+function paso(id,d){ var e=$(id); e.value=Math.max(0,Math.round(((parseFloat(e.value)||0)+d)*100)/100); if(S.alCambiar) S.alCambiar(id); }
 function fechaRegistro(){
   if(S.papel && $('fh') && $('fh').value) return new Date($('fh').value).toISOString();
   return new Date().toISOString();
@@ -1215,26 +1218,58 @@ function corte(){
   if(!esAdmin()) return menu();
   var info=S.datos.estante||{};
   var items=(S.datos.piezasCorte||[]).map(function(x){ var e=info[x.codigo+' · '+x.usado];
-    return {val:x.codigo, titulo:x.codigo, sub:x.usado+(e?' · hay '+e.existencia:''), extra:x.usado, nivel:e?NIVEL_EST[e.estado]:null, queda:e?e.existencia+' piezas':null}; });
+    return {val:x.codigo, titulo:x.codigo, sub:x.usado+(e?' · hay '+e.existencia:''), extra:x.usado, nivel:e?NIVEL_EST[e.estado]:null, queda:e?e.existencia+' piezas':null, pc:x}; });
   var h='<button class="back" onclick="menu()">'+ic('back',18,0,3)+'Inicio</button><h2>Corté piezas</h2><p class="sub">Piezas nuevas que dejaste en el estante</p>'+
         '<label>¿Qué pieza?</label>'+buscador('pc','Escribe: wakal, tapa, casita…',items)+
         (Object.keys(info).length?'<div class="sub" style="margin-top:6px">'+dot('rojo')+' = hay que cortar ya · '+dot('amarillo')+' = cortar pronto · '+dot('verde')+' = hay suficiente</div>':'')+
-        '<label>¿Cuántas piezas?</label>'+stepper('cant',0)+
-        '<label>Hojas de MDF que usaste (opcional)</label>'+stepper('hojas',0)+
+        '<label>Hojas de MDF que cortaste</label>'+stepper('hojas',0,false,true)+
+        '<div id="hojaInfo"></div>'+
+        '<label>¿Cuántas piezas salieron?</label>'+stepper('cant',0)+
+        '<div id="cantInfo"></div><div id="comboInfo"></div>'+
         '<label>¿Para qué pedido? (opcional)</label><select id="oc"><option value=""></option>';
   (S.datos.ocs||[]).forEach(function(o){ h+='<option>'+esc(o)+'</option>'; });
   h+='</select>';
   if(S.papel) h+=quienHtml()+'<label>Fecha y hora (de la hoja de papel)</label><input type="datetime-local" id="fh" value="'+ahoraLocal()+'">';
   h+='<div class="fijo"><div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarCorte()">'+ic('check',24,0,3)+'Registrar</button></div></div>';
   pantalla(h);
+  S.pick.pc.alElegir=function(){ $('hojas').value=0; $('cant').value=0; corteHojas(); };
+  /* al cambiar las hojas se calcula la cantidad; la cantidad se puede escribir a mano si no fue una hoja completa */
+  $('hojas').oninput=corteHojas;
+  $('cant').oninput=corteCant;
+  S.alCambiar=function(id){ if(id==='cant') corteCant(); else corteHojas(); };
+}
+/* Estándar de la pieza: piezas que salen de una hoja (pestaña Estante, columna "Piezas por hoja") */
+function piezaCorteSel(){ var x=elegido('pc'); return x?x.pc:null; }
+function comboDe(pc){ if(!pc||!pc.combo) return []; return (S.datos.piezasCorte||[]).filter(function(o){ return o.combo===pc.combo && o.codigo!==pc.codigo && o.porHoja>0; }); }
+function corteHojas(){
+  var pc=piezaCorteSel(), hojas=parseFloat($('hojas').value)||0, el=$('hojaInfo'); if(!el) return;
+  if(!pc){ el.innerHTML=''; corteCant(); return; }
+  if(!pc.porHoja){ el.innerHTML='<div class="warn">Esta pieza no tiene <b>piezas por hoja</b> en la pestaña Estante. Escribe la cantidad a mano.</div>'; corteCant(); return; }
+  el.innerHTML='<div class="sub" style="margin:8px 0 0">1 hoja'+(pc.calibre?' de '+esc(pc.calibre):'')+' = <b>'+pc.porHoja+'</b> '+esc(pc.codigo)+'</div>';
+  if(hojas>0) $('cant').value=Math.floor(hojas*pc.porHoja+1e-9);
+  corteCant();
+}
+function corteCant(){
+  var pc=piezaCorteSel(), hojas=parseFloat($('hojas').value)||0, cant=parseInt($('cant').value,10)||0, el=$('cantInfo'), ec=$('comboInfo'); if(!el) return;
+  var std=pc&&pc.porHoja&&hojas>0?Math.floor(hojas*pc.porHoja+1e-9):0;
+  el.innerHTML = std && cant!==std ? '<div class="sub" style="margin:8px 0 0">Con '+hojas+' hoja'+(hojas===1?'':'s')+' salen <b>'+std+'</b> según el estándar. Registras <b>'+cant+'</b>. <button class="link" onclick="$(\'cant\').value='+std+';corteCant()">Usar '+std+'</button></div>' :
+                 (pc&&pc.porHoja&&!hojas&&cant ? '<div class="sub" style="margin:8px 0 0">Cantidad específica, sin hoja completa.</div>' : '');
+  var cb=comboDe(pc);
+  if(!cb.length || !hojas){ ec.innerHTML=''; return; }
+  ec.innerHTML='<div class="ok-lote" style="margin-top:12px"><b>De la misma hoja también salen:</b>'+cb.map(function(o,i){ var n=Math.floor(hojas*o.porHoja+1e-9);
+      return '<label class="combo-op"><input type="checkbox" id="cb'+i+'" checked> '+n+' '+esc(o.codigo)+'</label>'; }).join('')+'<small>Se registran también, con el mismo registro.</small></div>';
 }
 function guardarCorte(){
-  var x=elegido('pc'), cant=parseInt($('cant').value,10)||0, hojas=parseInt($('hojas').value,10)||0;
+  var x=elegido('pc'), cant=parseInt($('cant').value,10)||0, hojas=parseFloat($('hojas').value)||0;
   if(!x){ $('err').textContent='Elige la pieza que cortaste.'; return; }
-  if(cant<=0){ $('err').textContent='Escribe cuántas piezas cortaste (más de 0).'; return; }
-  var oc=$('oc').value;
-  preguntar([['Pieza',x.titulo+(x.sub?' · '+String(x.sub).split(' · ')[0]:'')],['Piezas cortadas',cant]].concat(hojas?[['Hojas de MDF',hojas]]:[]).concat(oc?[['Pedido',oc]]:[]), [], function(){
-    encolar({ id:uid(), tipo:'corte', nombre:S.nombre, ts:fechaRegistro(), piezaCorte:x.val, cantidad:cant, hojas:hojas||'', oc:oc }, x.val+' · '+cant+' piezas', 'corte');
+  if(cant<=0){ $('err').textContent='Escribe cuántas piezas salieron (más de 0) o cuántas hojas cortaste.'; return; }
+  var oc=$('oc').value, pc=x.pc, combo=[];
+  comboDe(pc).forEach(function(o,i){ var c=$('cb'+i); if(c && c.checked) combo.push({piezaCorte:o.codigo, cantidad:Math.floor(hojas*o.porHoja+1e-9)}); });
+  var std=pc&&pc.porHoja&&hojas>0?Math.floor(hojas*pc.porHoja+1e-9):0, av=[];
+  if(std && cant>std) av.push('Pusiste '+cant+' y con '+hojas+' hoja'+(hojas===1?'':'s')+' salen '+std+' según el estándar.');
+  preguntar([['Pieza',x.titulo+(x.sub?' · '+String(x.sub).split(' · ')[0]:'')],['Piezas cortadas',cant]].concat(combo.map(function(c){ return ['También',c.cantidad+' '+c.piezaCorte]; })).concat(hojas?[['Hojas de MDF',hojas]]:[]).concat(oc?[['Pedido',oc]]:[]), av, function(){
+    encolar({ id:uid(), tipo:'corte', nombre:S.nombre, ts:fechaRegistro(), piezaCorte:x.val, cantidad:cant, hojas:hojas||'', oc:oc, combo:combo },
+      x.val+' · '+cant+' piezas'+(combo.length?' + '+combo.map(function(c){ return c.cantidad+' '+c.piezaCorte; }).join(' + '):''), 'corte');
   });
 }
 
