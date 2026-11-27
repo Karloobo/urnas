@@ -258,7 +258,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.13.1';
+var VERSION = '4.14';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -1036,8 +1036,14 @@ function esFaseTecho(pieza,f){
   if(/\(si lleva\)|techo/i.test(f)) return true;
   return (S.datos.areasFases||[]).some(function(e){ return e.pieza===pieza && e.fase===f && e.techo; });
 }
+/* Áreas, columna F "Solo para estos modelos": la fase solo aplica a esos modelos (p. ej. Corte de ángulo solo en Casita) */
+function faseAplica(modelo,pieza,fase){
+  var e=(S.datos.areasFases||[]).filter(function(x){ return x.pieza===pieza && x.fase===fase; })[0];
+  if(!e || !e.solo) return true;
+  return String(e.solo).split(/[,;\/]/).some(function(m){ return norm(m).trim() && norm(m).trim()===norm(modelo).trim(); });
+}
 function fasesDe(l,pieza){
-  var lista=S.datos.fases[pieza]||[];
+  var lista=(S.datos.fases[pieza]||[]).filter(function(f){ return faseAplica(l.modelo,pieza,f); });
   if(pieza!=='Techo' && !l.techo) lista=lista.filter(function(f){ return !esFaseTecho(pieza,f); });
   if(S.datos.faseEmpaque) lista=lista.filter(function(f){ return f!==S.datos.faseEmpaque; });
   if(areaFases()!=='Todas'){ var a=areaFases(); var sol=lista.filter(function(f){ var x=areaDeFase(pieza,f); return !x || x===a; }); lista=sol; }
@@ -1055,7 +1061,7 @@ function sugerida(l,pieza){
    desde la fase en que va, el siguiente bloque seguido de fases de esa área (pestaña Áreas). */
 function fasesBase(l,pieza){
   if(pieza==='Techo' && !l.techo) return [];
-  var lista=S.datos.fases[pieza]||[];
+  var lista=(S.datos.fases[pieza]||[]).filter(function(f){ return faseAplica(l.modelo,pieza,f); });
   if(pieza!=='Techo' && !l.techo) lista=lista.filter(function(f){ return !esFaseTecho(pieza,f); });
   if(S.datos.faseEmpaque) lista=lista.filter(function(f){ return f!==S.datos.faseEmpaque; });
   return lista;
@@ -1333,7 +1339,7 @@ function altaAdel(k,mov){
 function modeloInfo(n){ return (S.datos.modelos||[]).filter(function(m){ return m.nombre===n; })[0]||{nombre:n,techo:false}; }
 function fasesPara(modelo,pieza){
   var t=modeloInfo(modelo).techo; if(pieza==='Techo' && !t) return [];
-  return (S.datos.fases[pieza]||[]).filter(function(f){ return t || !/\(si lleva\)/i.test(f); });
+  return (S.datos.fases[pieza]||[]).filter(function(f){ return (t || !/\(si lleva\)/i.test(f)) && faseAplica(modelo,pieza,f); });
 }
 function pintarAltaAdel(){
   var d=S.ad, baja=d.mov==='Baja';
