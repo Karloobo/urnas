@@ -246,7 +246,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.6';
+var VERSION = '4.7';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -563,10 +563,12 @@ function menu(){
   if(S.papel) h+='<div class="warn"><b>Modo hoja de papel:</b> vas a poder poner la fecha y hora en que se hizo cada registro'+(esAdmin()?' y quién lo hizo':'')+'. <button class="link" onclick="S.papel=false;menu()">Salir de este modo</button></div>';
   if(n) h+='<div class="warn">'+n+' registro(s) guardados en este celular, esperando internet. <button class="link" onclick="enviarPendientes()">Enviar ahora</button></div>';
   h+=llegadasHtml();
-  h+='<button class="hero" onclick="lotes()">'+ic('avance',34)+'<span><b>Avance de un lote</b><small>Terminé una fase</small></span></button>';
+  /* El encargado tiene como tarea principal el corte: para él el botón grande es Corté piezas */
+  h+=esAdmin() ? '<button class="hero" onclick="corte()">'+ic('tijeras',34)+'<span><b>Corté piezas</b><small>Dejé piezas nuevas en el estante</small></span></button>'
+               : '<button class="hero" onclick="lotes()">'+ic('avance',34)+'<span><b>Avance de un lote</b><small>Terminé una fase</small></span></button>';
   h+='<div class="tiles">'+
      (puedeEstante()?'<button class="tile" onclick="estante()">'+ic('estante',28)+'<b>Tomé del estante</b></button>':'')+
-     (esAdmin()?'<button class="tile" onclick="corte()">'+ic('tijeras',28)+'<b>Corté piezas</b></button>':'')+
+     (esAdmin()?'<button class="tile" onclick="lotes()">'+ic('avance',28)+'<b>Avance de un lote</b></button>':'')+
      (S.datos.almacen?'<button class="tile" onclick="almacen(null,\'Salida\')">'+ic('brocha',28)+'<b>Pintura y ferretería</b></button>':'')+
      (S.datos.terminados&&esAdmin()?'<button class="tile" onclick="terminados()">'+ic('cajaok',28)+'<b>Urnas terminadas</b></button>':'')+
      '<button class="tile" onclick="problema()"><span class="roja">'+ic('alert',28)+'</span><b>Reportar problema</b></button>'+
