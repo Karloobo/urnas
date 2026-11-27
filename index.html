@@ -250,7 +250,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.11';
+var VERSION = '4.11.1';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -431,7 +431,10 @@ function cargarDatos(cb, ligero){
   var run=google.script.run
     .withSuccessHandler(function(d){
       enLinea=true; ultimaCarga=Date.now();
-      if(d && d.sinCambios){ pintarEstado(); return; }  /* nada nuevo: no se vuelve a dibujar la pantalla */
+      if(d && d.sinCambios){
+        /* nada nuevo: no se vuelve a dibujar la pantalla… salvo que el servidor ya tenga otra versión (recién actualizado) */
+        if(S.datos && d.version && d.version!==S.datos.version){ S.datos.version=d.version; guardar('datos',S.datos); cb&&cb(); }
+        pintarEstado(); return; }
       S.datos=d; guardar('datos',d); ultimaCompleta=Date.now(); aplicarPendientesALotes(); pintarEstado(); cb&&cb(); })
     .withFailureHandler(function(err){
       enLinea=false; pintarEstado();
