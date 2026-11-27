@@ -250,7 +250,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.11.1';
+var VERSION = '4.11.2';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -573,8 +573,9 @@ function quienHtml(){
   return h+'</select>';
 }
 
-/* Versión de Code.gs que necesita esta app. Si el servidor tiene otra más vieja, se le avisa al encargado. */
-var SERVIDOR_ESPERADO='4.11';
+/* Versión MÍNIMA de Code.gs con la que esta app funciona completa. Si el servidor es más viejo, se le avisa al encargado.
+   (Solo se sube cuando la app de verdad necesita algo nuevo del servidor.) */
+var SERVIDOR_ESPERADO='4.10';
 function versionMenor(a,b){ a=String(a||'0').split('.'); b=String(b).split('.'); for(var i=0;i<Math.max(a.length,b.length);i++){ var x=Number(a[i]||0), y=Number(b[i]||0); if(x!==y) return x<y; } return false; }
 function servidorViejoHtml(){
   if(!esAdmin() || !S.datos || !versionMenor(S.datos.version, SERVIDOR_ESPERADO)) return '';
