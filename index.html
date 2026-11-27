@@ -250,7 +250,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.10';
+var VERSION = '4.11';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -571,7 +571,7 @@ function quienHtml(){
 }
 
 /* Versión de Code.gs que necesita esta app. Si el servidor tiene otra más vieja, se le avisa al encargado. */
-var SERVIDOR_ESPERADO='4.10';
+var SERVIDOR_ESPERADO='4.11';
 function versionMenor(a,b){ a=String(a||'0').split('.'); b=String(b).split('.'); for(var i=0;i<Math.max(a.length,b.length);i++){ var x=Number(a[i]||0), y=Number(b[i]||0); if(x!==y) return x<y; } return false; }
 function servidorViejoHtml(){
   if(!esAdmin() || !S.datos || !versionMenor(S.datos.version, SERVIDOR_ESPERADO)) return '';
@@ -1227,7 +1227,7 @@ function guardarAvance(){
 var AREA_VARIOS='Lijado';
 function companeros(){
   var au=S.datos.areaUsuarios||{};
-  return (S.datos.nombres||[]).filter(function(n){ return au[n]===AREA_VARIOS || (S.datos.admins||[]).indexOf(n)>=0; });
+  return (S.datos.nombres||[]).filter(function(n){ return au[n]===AREA_VARIOS; }); /* solo la gente de Lijado (columna Área de Contraseñas) */
 }
 function puedeVarios(){
   var f=$('fase')&&$('fase').value;
