@@ -246,6 +246,8 @@
   .adel-aviso>svg{color:var(--yx);flex:none}.adel-aviso .chico{flex:none;padding:10px 16px;border-radius:10px;font-weight:700}
   .adel-fila{align-items:center;gap:12px}.adel-fila>div{flex:1}.adel-prev{display:flex;justify-content:center;margin:4px 0 2px}.adel-prev .sil{width:76px;height:76px}
   .seg.col1{flex-direction:column}
+  .ya-info{display:flex;gap:8px;align-items:flex-start;background:var(--azS);color:var(--tx);border-radius:10px;padding:10px 12px;margin:8px 0;font-size:15px;line-height:1.4}
+  .ya-info svg{flex:none;margin-top:2px;color:var(--yx)}.ya-info.ok{background:var(--okbg)}.ya-info.ok svg{color:var(--ok)}
   .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;margin:8px 0 2px;-webkit-overflow-scrolling:touch}
   .chip{flex:none;display:flex;align-items:center;gap:6px;border:2px solid var(--line);background:var(--card);color:var(--tx);border-radius:999px;padding:8px 14px;font-weight:700;font-size:15px;min-height:44px;white-space:nowrap}
   .chip.on{background:var(--y);border-color:var(--y);color:#fff}
@@ -267,7 +269,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.17';
+var VERSION = '4.18';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -379,6 +381,7 @@ function corto(f){ return String(f).replace(/\s*\([^)]*\)\s*$/,''); }
 function tagEstado(e){ var k=String(e||'').slice(0,3); return '<span class="tag t-'+esc(k)+'">'+esc(e||'')+'</span>'; }
 /* Íconos (líneas simples; heredan el color del texto) */
 var ICON={
+ info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
  users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.8"/><path d="M16.5 14.2c2.9.2 5 2.4 5 5.3"/>',
  hammer:'<path d="M13 4l7 7-2.5 2.5-7-7z"/><path d="M13.5 9.5L4 19a1.5 1.5 0 0 0 2 2l9.5-9.5"/><path d="M15 3.5l2-1.5 5 5-1.5 2"/>',
  box:'<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>',
@@ -766,7 +769,10 @@ function piezaLista(l,pieza){
   var ci=base.indexOf(l.av[pieza]); if(ci<0) return false;
   var ar=S.datos.areasFases?areaFases():'Todas';
   var fa = ar==='Todas' ? base : base.filter(function(f){ return areaDeFase(pieza,f)===ar; });
-  return fa.length>0 && fa.every(function(f){ return base.indexOf(f)<=ci; });
+  if(!(fa.length>0 && fa.every(function(f){ return base.indexOf(f)<=ci; }))) return false;
+  /* Con cantidades: la última fase del área debe tener todas las piezas del lote */
+  if(S.datos.hechas){ var u=fa[fa.length-1], q=hecho(l,pieza,u); if(q>0 && q<l.cantidad) return false; }
+  return true;
 }
 function trackPieza(l,pieza){
   if(!S.datos.areasFases) return '';
@@ -1213,6 +1219,7 @@ function detalleFase(i,pieza){
   if(sug) h+='<button class="otra" id="otraBtn" onclick="otraFase()">Elegir otra fase '+ic('down',18,0,3)+'</button>';
   if(areaFases()!=='Todas') h+='<div class="sub" style="margin-top:6px">Solo ves las fases de <b>'+esc(areaFases())+'</b>.</div>';
   if(S.sinFase){ pantalla(h); return; }
+  h+='<div id="faseYa">'+yaInfo(sug||act)+'</div>';
   h+='<label class="paso"><i>3</i>¿Cuántas pasaron?</label>'+stepper('cant',0,true)+
      '<button class="todo" id="todoBtn" onclick="todoLote()">'+textoTodo(sug||act)+'</button><div id="cantAviso"></div>'+variosHtml();
   h+='<details class="extra"><summary>¿Se dañó alguna? · Comentario</summary><label>Piezas dañadas (si no, déjalo en 0)</label>'+stepper('dan',0)+
@@ -1237,13 +1244,40 @@ function otraFase(){
     if($('fase').focus) $('fase').focus();
   }
 }
-function faseCambio(){ mostrarVarios(); if(S.variosOn) pintarManda(); var f=$('fase').value; if($('faseNom')) $('faseNom').textContent=nomFase(f); if($('btnFase')) $('btnFase').textContent=nomFase(f); if($('todoBtn')) $('todoBtn').textContent=textoTodo(f); avisoCant(); }
+function faseCambio(){ mostrarVarios(); if(S.variosOn) pintarManda(); var f=$('fase').value; if($('faseYa')) $('faseYa').innerHTML=yaInfo(f); if($('faseNom')) $('faseNom').textContent=nomFase(f); if($('btnFase')) $('btnFase').textContent=nomFase(f); if($('todoBtn')) $('todoBtn').textContent=textoTodo(f); avisoCant(); }
 function maxFase(f){ var d=disponible(S.lote,S.pieza,f); return isFinite(d)?d:S.lote.cantidad; }
-function textoTodo(f){ var m=maxFase(f); return m>=S.lote.cantidad?'Todo el lote ('+S.lote.cantidad+')':'Todas las que se pueden ('+m+')'; }
-function todoLote(){ $('cant').value=maxFase($('fase').value); avisoCant(); }
+/* Lo que ya se registró en esta fase (de cualquiera) y lo que falta para completar el lote */
+function yaHay(f){ return S.datos.hechas ? hecho(S.lote,S.pieza,f) : 0; }
+function faltan(f){ return Math.max(0, S.lote.cantidad-yaHay(f)); }
+function verboFase(f,pasado){ return /^mandar/i.test(nomFase(f)) ? (pasado?'mandaron':'mandar') : (pasado?'registraron':'registrar'); }
+function quienesHoy(f){
+  var m={}; recientes().forEach(function(x){ if(x.folio===S.lote.folio && x.pieza===S.pieza && x.fase===f) m[x.nombre]=(m[x.nombre]||0)+x.cantidad; });
+  var k=Object.keys(m); return k.length ? ' (hoy: '+k.map(function(n){ return esc(n)+' '+m[n]; }).join(', ')+')' : '';
+}
+function yaInfo(f){
+  if(!f || !S.datos.hechas) return '';
+  var h=yaHay(f), n=S.lote.cantidad, pv=previa(S.lote,S.pieza,f), hp=pv?yaHay(pv):0, t='';
+  if(h>=n) t='<div class="ya-info ok">'+ic('check',18,0,3)+'<span>Ya se '+verboFase(f,true)+' <b>'+h+' de '+n+'</b>: esta fase ya está completa en el lote'+quienesHoy(f)+'.</span></div>';
+  else if(h>0) t='<div class="ya-info">'+ic('info',18)+'<span>Ya se '+verboFase(f,true)+' <b>'+h+' de '+n+'</b>'+quienesHoy(f)+'. Faltan <b>'+(n-h)+'</b>.</span></div>';
+  if(pv && hp>0 && hp<n && hp>h) t+='<div class="ya-info">'+ic('info',18)+'<span>De <b>'+esc(nomFase(pv))+'</b> han terminado '+hp+': hay '+(hp-h)+' listas para esta fase.</span></div>';
+  return t;
+}
+function textoTodo(f){ var m=maxFase(f), h=yaHay(f), n=S.lote.cantidad;
+  if(h>0 && h<n && m>=n) return 'Lo que falta ('+(n-h)+')';
+  return m>=n?'Todo el lote ('+n+')':'Todas las que se pueden ('+m+')'; }
+function todoLote(){ var f=$('fase').value, h=yaHay(f), n=S.lote.cantidad, m=maxFase(f); $('cant').value=(h>0 && h<n && m>=n)?n-h:m; avisoCant(); }
+/* Avisos de cantidad: no bloquean, pero avisan si con lo que ya se registró se pasaría del lote */
+function avisosCantidad(f,c){
+  var r=[], h=yaHay(f), n=S.lote.cantidad, pv=previa(S.lote,S.pieza,f), hp=pv?yaHay(pv):0;
+  if(c>0 && h>0 && h+c>n) r.push('Ya se '+verboFase(f,true)+' '+h+' de '+n+'. Con estas '+c+' serían '+(h+c)+': te pasas por '+(h+c-n)+'. Solo faltan '+Math.max(0,n-h)+'.');
+  else if(c>n) r.push('Pusiste '+c+' y el lote es de '+n+'.');
+  if(c>0 && pv && hp>0 && h+c>hp && !(h+c>n)) r.push('De '+nomFase(pv)+' solo han terminado '+hp+' y ya hay '+h+' en '+nomFase(f)+'. ¿Seguro que son '+c+'?');
+  return r;
+}
 function avisoCant(){
   var el=$('cantAviso'); if(!el) return; var c=parseInt($('cant').value,10)||0, f=$('fase').value, m=maxFase(f), pv=previa(S.lote,S.pieza,f);
-  el.innerHTML = c>m ? '<div class="warn err">Solo puedes registrar hasta '+m+(isFinite(disponible(S.lote,S.pieza,f))?(pv?': son las que ya terminaron '+esc(nomFase(pv))+'.':': es el tamaño del lote.'):'.')+'</div>' : '';
+  el.innerHTML = c>m ? '<div class="warn err">Solo puedes registrar hasta '+m+(isFinite(disponible(S.lote,S.pieza,f))?(pv?': son las que ya terminaron '+esc(nomFase(pv))+'.':': es el tamaño del lote.'):'.')+'</div>'
+    : avisosCantidad(f,c).map(function(t){ return '<div class="warn">'+esc(t)+'</div>'; }).join('');
 }
 function stepper(id,v,grande,decimal){
   return '<div class="step'+(grande?' grande':'')+'"><button aria-label="Menos" onclick="paso(\''+id+'\',-1)">'+ic('minus',28)+'</button><input type="number" '+(decimal?'inputmode="decimal" step="any"':'inputmode="numeric" pattern="[0-9]*" step="1"')+' id="'+id+'" value="'+v+'" min="0"><button aria-label="Más" onclick="paso(\''+id+'\',1)">'+ic('plus',28)+'</button></div>';
@@ -1275,7 +1309,7 @@ function guardarAvance(){
   }
   /* Revisiones para evitar errores comunes (si no hay datos de cantidades) */
   var base=fasesBase(l,S.pieza), act=l.av[S.pieza], ci=base.indexOf(act), fi=base.indexOf(fase), av=[];
-  if(cant>l.cantidad) av.push('Pusiste '+cant+' y el lote es de '+l.cantidad+'.');
+  avisosCantidad(fase,cant).forEach(function(t){ av.push(t); });
   if(!isFinite(disp) && ci>=0 && fi>=0 && fi<=ci) av.push(nomFase(fase)+' ya estaba registrada (esta pieza va en '+nomFase(act)+'). ¿Es otra tanda del mismo lote?');
   if(!isFinite(disp) && fi>ci+1){
     var area=areaDeFase(S.pieza,fase), falta=base.slice(ci+1,fi);
