@@ -246,7 +246,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.5';
+var VERSION = '4.6';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -1244,6 +1244,7 @@ function comboDe(pc){ if(!pc||!pc.combo) return []; return (S.datos.piezasCorte|
 function corteHojas(){
   var pc=piezaCorteSel(), hojas=parseFloat($('hojas').value)||0, el=$('hojaInfo'); if(!el) return;
   if(!pc){ el.innerHTML=''; corteCant(); return; }
+  if(pc.porHoja===undefined){ el.innerHTML='<div class="warn">Falta actualizar el servidor: pega el <b>Code.gs</b> nuevo en Apps Script y haz <b>Nueva versión</b>. Mientras, escribe la cantidad a mano.</div>'; corteCant(); return; }
   if(!pc.porHoja){ el.innerHTML='<div class="warn">Esta pieza no tiene <b>piezas por hoja</b> en la pestaña Estante. Escribe la cantidad a mano.</div>'; corteCant(); return; }
   el.innerHTML='<div class="sub" style="margin:8px 0 0">1 hoja'+(pc.calibre?' de '+esc(pc.calibre):'')+' = <b>'+pc.porHoja+'</b> '+esc(pc.codigo)+'</div>';
   if(hojas>0) $('cant').value=Math.floor(hojas*pc.porHoja+1e-9);
