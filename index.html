@@ -258,7 +258,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.13';
+var VERSION = '4.13.1';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -1259,7 +1259,9 @@ function sumarAdelLocal(modelo,pieza,fase,color,cant){
   if(!x){ x={modelo:modelo,pieza:pieza,fase:fase,color:color,cantidad:0}; A.push(x); }
   x.cantidad+=cant; S.datos.adelantadas=A.filter(function(a){ return a.cantidad>0; });
 }
+function servidorConAdel(){ return S.datos && !versionMenor(S.datos.version,'4.13'); }
 function adelAvisoHtml(l,i){
+  if(!servidorConAdel()) return '';
   var ad=adelDe(l.modelo,S.pieza); if(!ad.length) return '';
   var n=ad.reduce(function(a,x){ return a+x.cantidad; },0);
   return '<div class="card adel-aviso">'+ic('estante',26)+'<div><b>En el estante hay '+n+' '+esc(nomPieza(S.pieza))+' adelantadas</b><small>'+
@@ -1288,6 +1290,7 @@ function usarAdel(i,k){
   pantalla(h);
 }
 function guardarUsoAdel(){
+  if(!servidorConAdel()){ $('err').textContent='Primero actualiza el servidor (Code.gs 4.13).'; return; }
   var sel=S.adelSel, l=S.datos.lotes[sel.i], a=sel.a, cant=parseInt($('cant').value,10)||0, fase=$('adFase').value;
   if(cant<=0){ $('err').textContent='Escribe cuántas usas (más de 0).'; return; }
   if(cant>a.cantidad){ $('err').textContent='En el estante solo hay '+a.cantidad+'.'; return; }
@@ -1309,7 +1312,8 @@ function adelantadas(){
   var A=adelStock().slice().sort(function(x,y){ return x.modelo<y.modelo?-1:x.modelo>y.modelo?1:0; });
   var h='<button class="back" onclick="menu()">'+ic('back',18,0,3)+'Inicio</button><h2>Piezas adelantadas</h2>'+
     '<p class="sub">Piezas que sobraron o regresaron y se guardaron en el estante. Cuando alguien abre un lote del mismo modelo, la app le ofrece usarlas.</p>'+
-    '<button class="big b1" onclick="altaAdel()">'+ic('plus',28)+'<span>Guardar piezas en el estante<small>Sobrantes, devoluciones o urnas a medio proceso</small></span></button>';
+    (servidorConAdel()?'<button class="big b1" onclick="altaAdel()">'+ic('plus',28)+'<span>Guardar piezas en el estante<small>Sobrantes, devoluciones o urnas a medio proceso</small></span></button>':
+      '<div class="card err"><b>Primero actualiza el servidor.</b> Para usar Piezas adelantadas hay que pegar el Code.gs 4.13 en Apps Script y crear una Nueva versión.</div>');
   if(!A.length) h+='<div class="card">No hay piezas adelantadas en el estante.</div>';
   S.adelLista=A;
   A.forEach(function(a,k){
@@ -1353,6 +1357,7 @@ function pintarAltaAdel(){
   if(!baja){ $('cant').oninput=function(){ S.ad.cant=parseInt(this.value,10)||0; }; S.alCambiar=function(){ S.ad.cant=parseInt($('cant').value,10)||0; }; $('adNota').oninput=function(){ S.ad.nota=this.value; }; }
 }
 function guardarAltaAdel(){
+  if(!servidorConAdel()){ $('err').textContent='Primero actualiza el servidor (Code.gs 4.13).'; return; }
   var d=S.ad, cant=parseInt($('cant').value,10)||0, nota=$('adNota').value.trim();
   if(d.mov!=='Baja' && $('adFase')) d.fase=$('adFase').value;
   if(cant<=0){ $('err').textContent='Escribe cuántas piezas (más de 0).'; return; }
