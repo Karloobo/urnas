@@ -246,6 +246,11 @@
   .adel-aviso>svg{color:var(--yx);flex:none}.adel-aviso .chico{flex:none;padding:10px 16px;border-radius:10px;font-weight:700}
   .adel-fila{align-items:center;gap:12px}.adel-fila>div{flex:1}.adel-prev{display:flex;justify-content:center;margin:4px 0 2px}.adel-prev .sil{width:76px;height:76px}
   .seg.col1{flex-direction:column}
+  .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;margin:8px 0 2px;-webkit-overflow-scrolling:touch}
+  .chip{flex:none;display:flex;align-items:center;gap:6px;border:2px solid var(--line);background:var(--card);color:var(--tx);border-radius:999px;padding:8px 14px;font-weight:700;font-size:15px;min-height:44px;white-space:nowrap}
+  .chip.on{background:var(--y);border-color:var(--y);color:#fff}
+  .filtros{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.filtros select{flex:1;min-width:140px;margin:0}
+  select.filtro-sel{margin:8px 0}
   .porti .porti-r{border-top:1px solid var(--line);padding-top:10px;margin-top:10px;line-height:1.45}
   .hide{display:none}
   .ver{font-size:12px;color:var(--mu);text-align:center;margin-top:14px}
@@ -262,7 +267,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.16';
+var VERSION = '4.17';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -817,16 +822,32 @@ function lotes(filtro){
         (miArea()!=='Todas'?(function(){ var a=miArea(), n=0; S.datos.lotes.forEach(function(l){ if(avanceLote(l)[a]>=1) n++; });
           return '<div class="seg"><button class="'+(S.verListos?'':'on')+'" onclick="S.verListos=false;lotes()">Pendientes ('+(S.datos.lotes.length-n)+')</button>'+
                  '<button class="'+(S.verListos?'on':'')+'" onclick="S.verListos=true;lotes()">Terminados ('+n+')</button></div>'; })():'')+
-        '<input type="text" id="busca" aria-label="Buscar lote" placeholder="Busca el nombre de la tarjeta" value="'+esc(filtro)+'" oninput="filtrarLotes(this.value)">'+
+        '<input type="text" id="busca" aria-label="Buscar lote" placeholder="Busca el nombre de la tarjeta" value="'+esc(filtro)+'" oninput="filtrarLotes(this.value)">'+filtrosLotes()+
         '<div id="listaLotes" style="margin-top:4px"></div>'+
         (S.datos.renglones?'<div class="fijo"><div class="btnrow"><button class="b2" onclick="empacado()">'+ic('pkg')+'Empacado</button></div></div>':'');
   pantalla(h); filtrarLotes(filtro);
+}
+/* Filtros de la lista de lotes: modelo, pedido y solo atrasados */
+function filtrosLotes(){
+  var ms=[], ocs=[], atr=0;
+  S.datos.lotes.forEach(function(l){ if(ms.indexOf(l.modelo)<0) ms.push(l.modelo); if(ocs.indexOf(l.oc)<0) ocs.push(l.oc); if(l.estado==='Atrasado') atr++; });
+  if(S.fModeloL && ms.indexOf(S.fModeloL)<0) S.fModeloL=''; if(S.fOcL && ocs.indexOf(S.fOcL)<0) S.fOcL='';
+  var h='';
+  if(ms.length>1 || ocs.length>1){
+    h+='<div class="filtros">'+(ms.length>1?'<select id="fModeloL" aria-label="Filtrar por modelo" onchange="S.fModeloL=this.value;filtrarLotes($(\'busca\').value)"><option value="">Todos los modelos</option>'+ms.sort().map(function(m){ return '<option'+(S.fModeloL===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select>':'')+
+      (ocs.length>1?'<select id="fOcL" aria-label="Filtrar por pedido" onchange="S.fOcL=this.value;filtrarLotes($(\'busca\').value)"><option value="">Todos los pedidos</option>'+ocs.map(function(o){ return '<option'+(S.fOcL===o?' selected':'')+'>'+esc(o)+'</option>'; }).join('')+'</select>':'')+'</div>';
+  }
+  if(atr) h+='<div class="chips"><button class="chip'+(S.fAtrL?' on':'')+'" id="fAtrL" onclick="S.fAtrL=!S.fAtrL;this.className=\'chip\'+(S.fAtrL?\' on\':\'\');filtrarLotes($(\'busca\').value)">'+dot('rojo')+' Solo atrasados ('+atr+')</button></div>';
+  return h;
 }
 function filtrarLotes(f){
   f=norm(f).split(/\s+/).filter(Boolean);
   var grupos={}, orden=[], h='';
   S.datos.lotes.forEach(function(l,i){
-    var t=norm(l.folio); if(f.length && !f.every(function(w){ return t.indexOf(w)>=0; })) return;
+    var t=norm(l.folio+' '+l.modelo+' '+l.color+' '+l.oc); if(f.length && !f.every(function(w){ return t.indexOf(w)>=0; })) return;
+    if(S.fModeloL && l.modelo!==S.fModeloL) return;
+    if(S.fOcL && l.oc!==S.fOcL) return;
+    if(S.fAtrL && l.estado!=='Atrasado') return;
     /* Pendientes = a mi área le falta algo en ese lote; Terminados = mi área ya hizo todas sus fases */
     if(miArea()!=='Todas' && (avanceLote(l)[miArea()]>=1) !== !!S.verListos) return;
     var k=l.oc+'|'+l.semana; if(!grupos[k]){ grupos[k]=[]; orden.push(k); } grupos[k].push(i);
@@ -891,7 +912,7 @@ function empacado(oc){
   if(ocs.length>1){ h+='<label>Pedido</label><div class="seg">'; ocs.forEach(function(o){ h+='<button class="'+(o===S.ocEmp?'on':'')+'" onclick="empacado(\''+esc(o)+'\')">'+esc(o)+'</button>'; }); h+='</div>'; }
   var items=(S.datos.renglones||[]).filter(function(r){ return r.oc===S.ocEmp; }).map(function(r,i){
     var falta=Math.max(0,r.aProducir-r.empacadas);
-    return {val:r, titulo:r.desc||r.modelo, sub:r.codigo+' · empacadas '+r.empacadas+' de '+r.aProducir+(falta?'':' ✓'), extra:r.modelo+' '+r.color, sil:silTile(r.modelo,r.color,40)};
+    return {val:r, titulo:r.desc||r.modelo, sub:r.codigo+' · empacadas '+r.empacadas+' de '+r.aProducir+(falta?'':' ✓'), extra:r.modelo+' '+r.color, grupo:r.modelo, sil:silTile(r.modelo,r.color,40)};
   });
   var sem=semanaHoy(S.ocEmp);
   h+='<label>¿Qué modelo empacaste?</label>'+buscador('mod','Escribe: casa, clásica, chocolate…',items)+
@@ -963,14 +984,14 @@ function tmItems(){
     var src = T.motivo==='Para un pedido' ? (S.datos.renglones||[]) : (S.datos.rengTodos||[]);
     src.filter(function(r){ return r.oc===T.oc; }).forEach(function(r){
       var t=tmDe(r.modelo,r.color), hay=t?t.existencia:0;
-      var x={val:{t:t, r:r}, titulo:r.desc||(r.modelo+' '+r.color), extra:r.modelo+' '+r.color+' '+r.codigo, sil:silTile(r.modelo,r.color,40)};
+      var x={val:{t:t, r:r}, titulo:r.desc||(r.modelo+' '+r.color), extra:r.modelo+' '+r.color+' '+r.codigo, grupo:r.modelo, sil:silTile(r.modelo,r.color,40)};
       if(T.motivo==='Sobrantes de un pedido'){ var ex=(S.datos.rengTodos||[]).filter(function(q){ return q.oc===r.oc && q.codigo===r.codigo; })[0]; x.sub=r.codigo+' · extras de este pedido: '+(ex?ex.extras:0)+' · en almacén: '+hay; }
       else { x.sub=r.codigo; x.nivel=nivel(hay); x.queda=hay+' en almacén'; }
       items.push(x);
     });
   } else {
     (S.datos.terminados||[]).forEach(function(t){
-      var x={val:{t:t, r:null}, titulo:t.desc||(t.modelo+' '+t.color), extra:t.modelo+' '+t.color+' '+t.codigo, sil:silTile(t.modelo,t.color,40)};
+      var x={val:{t:t, r:null}, titulo:t.desc||(t.modelo+' '+t.color), extra:t.modelo+' '+t.color+' '+t.codigo, grupo:t.modelo, sil:silTile(t.modelo,t.color,40)};
       if(T.mov==='Salida'){ x.sub=t.codigo; x.nivel=nivel(t.existencia); x.queda=t.existencia+' en almacén'; } else x.sub=t.codigo+' · en almacén: '+t.existencia;
       items.push(x);
     });
@@ -1348,7 +1369,11 @@ function adelantadas(){
       '<div class="card err"><b>Primero actualiza el servidor.</b> Para usar Piezas adelantadas hay que pegar el Code.gs 4.13 en Apps Script y crear una Nueva versión.</div>');
   if(!A.length) h+='<div class="card">No hay piezas adelantadas en el estante.</div>';
   S.adelLista=A;
+  var ms=[]; A.forEach(function(a){ if(ms.indexOf(a.modelo)<0) ms.push(a.modelo); });
+  if(S.fModeloA && ms.indexOf(S.fModeloA)<0) S.fModeloA='';
+  if(ms.length>1) h+='<select class="filtro-sel" aria-label="Filtrar por modelo" onchange="S.fModeloA=this.value;adelantadas()"><option value="">Todos los modelos</option>'+ms.map(function(m){ return '<option'+(S.fModeloA===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select>';
   A.forEach(function(a,k){
+    if(S.fModeloA && a.modelo!==S.fModeloA) return;
     h+='<div class="card reg adel-fila">'+silTile(a.modelo,a.color,44)+'<div><b>'+a.cantidad+' · '+esc(nomPieza(a.pieza))+'</b> · '+esc(a.modelo)+'<br><small>Llegaron a '+esc(nomFase(a.fase))+' · '+esc(a.color)+'</small></div>'+
        '<button class="bR chico" onclick="altaAdel('+k+',\'Baja\')">Sacar</button></div>';
   });
@@ -1553,25 +1578,49 @@ function silTile(modelo,color,px){ return '<span class="sil">'+silueta(modelo,co
 function norm(t){ return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
 /* items: [{val, titulo, sub, nivel:[color,icono,texto], queda}] */
 function buscador(id, placeholder, items){
-  S.pick=S.pick||{}; S.pick[id]={items:items, sel:null, todos:false};
+  S.pick=S.pick||{}; S.pick[id]={items:items, sel:null, todos:false, fNivel:'', fGrupo:''};
   return '<div id="'+id+'_buscar"><input type="text" id="'+id+'_q" placeholder="'+esc(placeholder)+'" oninput="pintarOpciones(\''+id+'\')" autocomplete="off">'+
+         filtrosBuscador(id,items)+
          '<div id="'+id+'_res" style="margin-top:8px"></div>'+
          '<button class="link" id="'+id+'_todos" onclick="verTodos(\''+id+'\')">Ver toda la lista ▾</button></div>'+
          '<div id="'+id+'_sel"></div>';
 }
+/* Filtros del buscador: por semáforo (si la lista lo tiene) y por modelo (si hay varios) */
+function filtrosBuscador(id,items){
+  var nv={}, gr=[], h='';
+  items.forEach(function(x){ if(x.nivel) nv[x.nivel[0]]=(nv[x.nivel[0]]||0)+1; if(x.grupo && gr.indexOf(x.grupo)<0) gr.push(x.grupo); });
+  var colores=['rojo','amarillo','verde'].filter(function(c){ return nv[c]; });
+  if(colores.length>1){
+    h+='<div class="chips" role="group" aria-label="Filtrar por semáforo"><button class="chip on" id="'+id+'_fn_" onclick="filtroNivel(\''+id+'\',\'\')">Todos</button>'+
+      colores.map(function(c){ var t=items.filter(function(x){ return x.nivel&&x.nivel[0]===c; })[0].nivel; return '<button class="chip" id="'+id+'_fn_'+c+'" onclick="filtroNivel(\''+id+'\',\''+c+'\')">'+t[1]+' '+esc(t[2])+' ('+nv[c]+')</button>'; }).join('')+'</div>';
+  }
+  if(gr.length>1){
+    gr.sort();
+    h+='<select id="'+id+'_fg" class="filtro-sel" aria-label="Filtrar por modelo" onchange="S.pick[\''+id+'\'].fGrupo=this.value;pintarOpciones(\''+id+'\')"><option value="">Todos los modelos</option>'+
+      gr.map(function(g){ return '<option>'+esc(g)+'</option>'; }).join('')+'</select>';
+  }
+  return h;
+}
+function filtroNivel(id,c){
+  var P=S.pick[id]; P.fNivel=c;
+  ['','rojo','amarillo','verde'].forEach(function(k){ var b=$(id+'_fn_'+k); if(b) b.className='chip'+(k===c?' on':''); });
+  pintarOpciones(id);
+}
+function pasaFiltro(P,x){ return (!P.fNivel || (x.nivel&&x.nivel[0]===P.fNivel)) && (!P.fGrupo || x.grupo===P.fGrupo); }
 function opcionHtml(id,x,i){
   var n=x.nivel;
   var cuerpo='<b>'+(n?n[1]+' ':'')+esc(x.titulo)+'</b>'+(x.sub?'<span>'+esc(x.sub)+'</span>':'');
   return '<button class="lote opc'+(n?' n-'+n[0]:'')+'" onclick="elegir(\''+id+'\','+i+')">'+(x.sil?'<div class="opc-sil">'+x.sil+'<div>'+cuerpo+'</div></div>':cuerpo)+'</button>';
 }
 function pintarOpciones(id){
-  var P=S.pick[id], q=norm($(id+'_q').value).split(/\s+/).filter(Boolean), h='', n=0;
+  var P=S.pick[id], q=norm($(id+'_q').value).split(/\s+/).filter(Boolean), h='', n=0, filtro=!!(P.fNivel||P.fGrupo);
   if(q.length){
-    P.items.forEach(function(x,i){ var t=norm(x.titulo+' '+(x.sub||'')+' '+(x.extra||'')); if(q.every(function(w){return t.indexOf(w)>=0;})){ if(n<8) h+=opcionHtml(id,x,i); n++; } });
-    if(!n) h='<div class="card">No encontré nada con ese nombre. Toca <b>Ver toda la lista</b>.</div>';
+    P.items.forEach(function(x,i){ if(!pasaFiltro(P,x)) return; var t=norm(x.titulo+' '+(x.sub||'')+' '+(x.extra||'')+' '+(x.grupo||'')); if(q.every(function(w){return t.indexOf(w)>=0;})){ if(n<8) h+=opcionHtml(id,x,i); n++; } });
+    if(!n) h='<div class="card">No encontré nada con ese nombre'+(filtro?' con ese filtro':'')+'. Toca <b>Ver toda la lista</b>.</div>';
     else if(n>8) h+='<div class="sub">…y '+(n-8)+' más. Escribe más letras para ver menos.</div>';
-  } else if(P.todos){
-    P.items.forEach(function(x,i){ h+=opcionHtml(id,x,i); });
+  } else if(P.todos || filtro){
+    P.items.forEach(function(x,i){ if(pasaFiltro(P,x)){ h+=opcionHtml(id,x,i); n++; } });
+    if(!n) h='<div class="card">No hay nada con ese filtro.</div>';
   }
   $(id+'_res').innerHTML=h;
   $(id+'_todos').textContent = P.todos&&!q.length ? 'Ocultar lista ▴' : 'Ver toda la lista ▾';
@@ -1593,7 +1642,7 @@ function estante(){
   if(!puedeEstante()) return menu();
   var info=S.datos.estante||{};
   var items=(S.datos.piezasEstante||[]).map(function(t){ var p=t.split(' · '), e=info[t];
-    return {val:t, titulo:p[0], sub:[p.slice(1).join(' · '), e?'hay '+e.existencia+(e.min?' (mínimo '+e.min+')':''):''].filter(Boolean).join(' · '), extra:p.slice(1).join(' '), nivel:e?NIVEL_EST[e.estado]:null, queda:e?e.existencia+' piezas':null}; });
+    return {val:t, titulo:p[0], sub:[p.slice(1).join(' · '), e?'hay '+e.existencia+(e.min?' (mínimo '+e.min+')':''):''].filter(Boolean).join(' · '), extra:p.slice(1).join(' '), grupo:p.slice(1).join(' · '), nivel:e?NIVEL_EST[e.estado]:null, queda:e?e.existencia+' piezas':null}; });
   var h='<button class="back" onclick="menu()">'+ic('back',18,0,3)+'Inicio</button><h2>Tomé piezas del estante</h2>'+
         '<label>¿Qué pieza?</label>'+buscador('pz','Escribe: wakal, tapa, casita…',items)+
         (Object.keys(info).length?'<div class="sub" style="margin-top:6px">'+dot('verde')+' hay suficiente · '+dot('amarillo')+' cortar pronto · '+dot('rojo')+' hay que cortar ya</div>':'')+
@@ -1617,7 +1666,7 @@ function corte(){
   if(!esAdmin()) return menu();
   var info=S.datos.estante||{};
   var items=(S.datos.piezasCorte||[]).map(function(x){ var e=info[x.codigo+' · '+x.usado];
-    return {val:x.codigo, titulo:x.codigo, sub:x.usado+(e?' · hay '+e.existencia:''), extra:x.usado, nivel:e?NIVEL_EST[e.estado]:null, queda:e?e.existencia+' piezas':null, pc:x}; });
+    return {val:x.codigo, titulo:x.codigo, sub:x.usado+(e?' · hay '+e.existencia:''), extra:x.usado, grupo:x.usado, nivel:e?NIVEL_EST[e.estado]:null, queda:e?e.existencia+' piezas':null, pc:x}; });
   var h='<button class="back" onclick="menu()">'+ic('back',18,0,3)+'Inicio</button><h2>Corté piezas</h2><p class="sub">Piezas nuevas que dejaste en el estante</p>'+
         '<label>¿Qué pieza?</label>'+buscador('pc','Escribe: wakal, tapa, casita…',items)+
         (Object.keys(info).length?'<div class="sub" style="margin-top:6px">'+dot('rojo')+' = hay que cortar ya · '+dot('amarillo')+' = cortar pronto · '+dot('verde')+' = hay suficiente</div>':'')+
@@ -1790,14 +1839,42 @@ function regHtml(x, tag){
   return '<div class="card reg"><div><b>'+esc(x.cuando)+'</b> '+(tag||'')+(esAdmin()&&x.nombre?' <span class="quien">'+esc(x.nombre)+'</span>':'')+(!esAdmin()&&x.por?' <span class="quien">lo registró '+esc(x.por)+'</span>':'')+'<br>'+esc(x.texto)+'</div>'+
     (x.puede?'<button class="bR chico" onclick="anularReg(\''+esc(x.id)+'\', misRegistros)">Anular</button>':'')+'</div>';
 }
+var TIPO_NOM={avance:'Avance',estante:'Estante',corte:'Corte',empacado:'Empacado',almacen:'Pintura y ferretería',entrada:'Entradas',terminado:'Terminados',recibido:'Recibí',problema:'Problemas',adelantada:'Adelantadas'};
+function diaDe(r){ var m=String(r.cuando||'').match(/^(\d\d\/\d\d)/); return m?m[1]:''; }
+function ddmm(d){ return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2); }
+/* Filtros de registros: buscar texto, tipo, día y (encargado) de quién */
 function pintarRegs(){
   var el=$('regsSrv'); if(!el) return; var rs=S.regs||[], h='';
-  if(esAdmin()){
-    var ns=[]; rs.forEach(function(r){ if(ns.indexOf(r.nombre)<0) ns.push(r.nombre); });
-    h+='<label>¿De quién?</label><select id="fquienR" onchange="S.fRegs=this.value;pintarRegs()"><option value="">Todos</option>'+ns.map(function(n){ return '<option'+(S.fRegs===n?' selected':'')+'>'+esc(n)+'</option>'; }).join('')+'</select><div style="height:10px"></div>';
-    if(S.fRegs) rs=rs.filter(function(r){ return r.nombre===S.fRegs; });
+  S.fTipo=S.fTipo||''; S.fDia=S.fDia||''; S.fTexto=S.fTexto||'';
+  if(rs.length>3){
+    h+='<input type="text" id="fTextoR" placeholder="Buscar: lote, modelo, pieza, fase…" aria-label="Buscar en los registros" value="'+esc(S.fTexto)+'" oninput="S.fTexto=this.value;pintarListaRegs()" autocomplete="off">';
+    var tipos={}; rs.forEach(function(r){ tipos[r.tipo]=(tipos[r.tipo]||0)+1; });
+    var ks=Object.keys(tipos);
+    if(ks.length>1) h+='<div class="chips" role="group" aria-label="Filtrar por tipo"><button class="chip'+(S.fTipo?'':' on')+'" onclick="S.fTipo=\'\';pintarRegs()">Todos ('+rs.length+')</button>'+
+      ks.map(function(k){ return '<button class="chip'+(S.fTipo===k?' on':'')+'" onclick="S.fTipo=\''+k+'\';pintarRegs()">'+esc(TIPO_NOM[k]||k)+' ('+tipos[k]+')</button>'; }).join('')+'</div>';
   }
-  if(!rs.length) h+='<div class="card">'+(esAdmin()?'No hay registros.':'Hoy no has registrado nada.')+'</div>';
+  if(esAdmin()){
+    var ns=[], dias=[]; rs.forEach(function(r){ if(ns.indexOf(r.nombre)<0) ns.push(r.nombre); var d=diaDe(r); if(d && dias.indexOf(d)<0) dias.push(d); });
+    var hoy=ddmm(new Date()), ayer=ddmm(new Date(Date.now()-86400000));
+    h+='<div class="filtros"><select id="fquienR" aria-label="De quién" onchange="S.fRegs=this.value;pintarListaRegs()"><option value="">Todas las personas</option>'+ns.map(function(n){ return '<option'+(S.fRegs===n?' selected':'')+'>'+esc(n)+'</option>'; }).join('')+'</select>'+
+      (dias.length>1?'<select id="fdiaR" aria-label="Qué día" onchange="S.fDia=this.value;pintarListaRegs()"><option value="">Todos los días</option>'+dias.map(function(d){ return '<option value="'+d+'"'+(S.fDia===d?' selected':'')+'>'+(d===hoy?'Hoy':d===ayer?'Ayer':d)+'</option>'; }).join('')+'</select>':'')+'</div>';
+  }
+  h+='<div id="regsLista"></div>';
+  el.innerHTML=h; pintarListaRegs();
+}
+function pintarListaRegs(){
+  var el=$('regsLista'); if(!el) return; var rs=S.regs||[], h='', total=rs.length;
+  var q=norm(S.fTexto||'').split(/\s+/).filter(Boolean);
+  rs=rs.filter(function(r){
+    if(S.fTipo && r.tipo!==S.fTipo) return false;
+    if(esAdmin() && S.fRegs && r.nombre!==S.fRegs) return false;
+    if(esAdmin() && S.fDia && diaDe(r)!==S.fDia) return false;
+    if(q.length){ var t=norm(r.texto+' '+r.nombre+' '+(r.por||'')); if(!q.every(function(w){ return t.indexOf(w)>=0; })) return false; }
+    return true;
+  });
+  if(!total) h+='<div class="card">'+(esAdmin()?'No hay registros.':'Hoy no has registrado nada.')+'</div>';
+  else if(!rs.length) h+='<div class="card">No hay registros con ese filtro.</div>';
+  else if(rs.length<total) h+='<p class="sub">'+rs.length+' de '+total+' registros</p>';
   rs.forEach(function(r){ h+=regHtml(r, '<span class="tag t-Ter">guardado</span>'); });
   el.innerHTML=h;
 }
