@@ -250,7 +250,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.9';
+var VERSION = '4.10';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -571,7 +571,7 @@ function quienHtml(){
 }
 
 /* Versión de Code.gs que necesita esta app. Si el servidor tiene otra más vieja, se le avisa al encargado. */
-var SERVIDOR_ESPERADO='4.9';
+var SERVIDOR_ESPERADO='4.10';
 function versionMenor(a,b){ a=String(a||'0').split('.'); b=String(b).split('.'); for(var i=0;i<Math.max(a.length,b.length);i++){ var x=Number(a[i]||0), y=Number(b[i]||0); if(x!==y) return x<y; } return false; }
 function servidorViejoHtml(){
   if(!esAdmin() || !S.datos || !versionMenor(S.datos.version, SERVIDOR_ESPERADO)) return '';
@@ -1142,7 +1142,7 @@ function detalleFase(i,pieza){
   h+='<div class="fijo"><div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarAvance()">'+ic('check',24,0,3)+'<span>Registrar <span id="btnFase">'+esc(nomFase(sug||(lista.indexOf(act)>=0?act:lista[0])||''))+'</span></span></button></div></div>';
   pantalla(h);
   S.alCambiar=function(id){ avisoCant(); if(S.variosOn) variosCambio(); }; $('cant').oninput=function(){ avisoCant(); if(S.variosOn) variosCambio(); };
-  if(S.variosOn) pintarVarios();
+  mostrarVarios(); if(S.variosOn) pintarVarios();
 }
 function $fase0(sug,act,lista){ return sug||act||lista[0]||''; }
 /* "Elegir otra fase" abre la lista; tocarlo otra vez la cierra y regresa a la fase sugerida */
@@ -1158,7 +1158,7 @@ function otraFase(){
     if($('fase').focus) $('fase').focus();
   }
 }
-function faseCambio(){ if(S.variosOn) pintarManda(); var f=$('fase').value; if($('faseNom')) $('faseNom').textContent=nomFase(f); if($('btnFase')) $('btnFase').textContent=nomFase(f); if($('todoBtn')) $('todoBtn').textContent=textoTodo(f); avisoCant(); }
+function faseCambio(){ mostrarVarios(); if(S.variosOn) pintarManda(); var f=$('fase').value; if($('faseNom')) $('faseNom').textContent=nomFase(f); if($('btnFase')) $('btnFase').textContent=nomFase(f); if($('todoBtn')) $('todoBtn').textContent=textoTodo(f); avisoCant(); }
 function maxFase(f){ var d=disponible(S.lote,S.pieza,f); return isFinite(d)?d:S.lote.cantidad; }
 function textoTodo(f){ var m=maxFase(f); return m>=S.lote.cantidad?'Todo el lote ('+S.lote.cantidad+')':'Todas las que se pueden ('+m+')'; }
 function todoLote(){ $('cant').value=maxFase($('fase').value); avisoCant(); }
@@ -1205,7 +1205,7 @@ function guardarAvance(){
   }
   if(dan>cant) av.push('Pusiste más dañadas ('+dan+') que piezas ('+cant+').');
   var lineasVarios=[];
-  if(S.variosOn){
+  if(S.variosOn && puedeVarios()){
     var partes=partesVarios(), suma=partes.reduce(function(a,x){ return a+x.cantidad; },0);
     if(!partes.length){ $('err').textContent='Marca quién trabajó y cuántas hizo cada quien.'; return; }
     if(suma!==cant){ $('err').textContent='Las partes suman '+suma+' y el total es '+cant+'. Corrige las cantidades o toca "Repartir igual".'; return; }
@@ -1223,18 +1223,28 @@ function guardarAvance(){
     av, function(){ if(torn) descontarTornillosLocal(torn/T.porBolsa); encolar(rec, corto(l.folio)+' · '+pz+' · '+nomFase(fase)+' · '+cant+(rec.reparto?' (entre varios: '+rec.reparto.map(function(x){ return x.nombre+' '+x.cantidad; }).join(', ')+')':'')+(rec.manda?' · y las mandó':''), 'avance'); S.variosOn=false; });
 }
 /* ---------- "Lo hicimos entre varios": uno registra y cada quien queda con su parte ---------- */
+/* Solo para Lijado (ahí trabajan varios en el mismo lote). Es opcional: si no se toca, se registra como siempre. */
+var AREA_VARIOS='Lijado';
 function companeros(){
-  var ar=miArea(), au=S.datos.areaUsuarios||{};
-  return (S.datos.nombres||[]).filter(function(n){ return ar==='Todas' ? true : (au[n]===ar || (S.datos.admins||[]).indexOf(n)>=0); });
+  var au=S.datos.areaUsuarios||{};
+  return (S.datos.nombres||[]).filter(function(n){ return au[n]===AREA_VARIOS || (S.datos.admins||[]).indexOf(n)>=0; });
+}
+function puedeVarios(){
+  var f=$('fase')&&$('fase').value;
+  return !!f && areaDeFase(S.pieza,f)===AREA_VARIOS && (miArea()===AREA_VARIOS || esAdmin()) && companeros().length>=2;
 }
 function variosHtml(){
-  if(companeros().length<2) return '';
-  return '<button class="otra" id="variosBtn" onclick="toggleVarios()">'+(S.variosOn?ic('back',18,0,3)+'Lo hice yo solo':ic('users',20)+'Lo hicimos entre varios')+'</button><div id="variosBox"></div>';
+  return '<div id="variosWrap"><button class="otra" id="variosBtn" onclick="toggleVarios()">'+(S.variosOn?ic('back',18,0,3)+'Lo hice yo solo':ic('users',20)+'Lo hicimos entre varios (opcional)')+'</button><div id="variosBox"></div></div>';
+}
+function mostrarVarios(){
+  var w=$('variosWrap'); if(!w) return;
+  var si=puedeVarios(); w.className=si?'':'hide';
+  if(!si && S.variosOn){ S.variosOn=false; $('variosBtn').innerHTML=ic('users',20)+'Lo hicimos entre varios (opcional)'; pintarVarios(); }
 }
 function toggleVarios(){
   S.variosOn=!S.variosOn; S.varios={};
   if(S.variosOn) S.varios[S.nombre]=parseInt($('cant').value,10)||0;
-  $('variosBtn').innerHTML=S.variosOn?ic('back',18,0,3)+'Lo hice yo solo':ic('users',20)+'Lo hicimos entre varios';
+  $('variosBtn').innerHTML=S.variosOn?ic('back',18,0,3)+'Lo hice yo solo':ic('users',20)+'Lo hicimos entre varios (opcional)';
   pintarVarios();
 }
 function pintarVarios(){
