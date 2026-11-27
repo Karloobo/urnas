@@ -262,7 +262,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.15';
+var VERSION = '4.16';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -493,8 +493,21 @@ window.addEventListener('online',function(){ enLinea=true; pintarEstado(); envia
 window.addEventListener('offline',function(){ enLinea=false; pintarEstado(); });
 
 /* Mientras no se envían, los registros pendientes adelantan el avance que se muestra */
+/* Si un lote llegó a una fase que su modelo ya no usa (p. ej. el Pegado del techo que se quitó, o Corte de ángulo
+   en un modelo que no es Casita), se toma como la última fase de su lista con número menor o igual. */
+function normalizarAvances(){
+  (S.datos.lotes||[]).forEach(function(l){
+    PIEZAS.forEach(function(p){
+      var a=l.av&&l.av[p[0]]; if(!a || a==='—' || !/^\s*\d/.test(a)) return;
+      var base=fasesBase(l,p[0]); if(!base.length || base.indexOf(a)>=0) return;
+      var n=numFase(a), k=-1; base.forEach(function(f,j){ if(numFase(f)<=n) k=j; });
+      if(k>=0) l.av[p[0]]=base[k];
+    });
+  });
+}
 function aplicarPendientesALotes(){
   if(!S.datos) return;
+  normalizarAvances();
   cola().forEach(function(r){ if(r.tipo==='recibido') sumarRecib(r.folio,r.pieza,r.fase,Number(r.enviadas)||0); });
   cola().forEach(aplicarRecLocal);
 }
