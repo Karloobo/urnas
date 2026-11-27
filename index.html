@@ -246,13 +246,13 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.7';
+var VERSION = '4.8';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
   var t = setTimeout(function(){ if(ctrl) ctrl.abort(); }, accion==='entrega' ? 90000 : 20000);
   var p = accion==='datos'
-    ? fetch(API_URL+'?accion=datos&t='+Date.now(), {signal: ctrl&&ctrl.signal})
+    ? fetch(API_URL+'?accion=datos&t='+Date.now()+(rec&&rec.si?'&si='+encodeURIComponent(rec.si):''), {signal: ctrl&&ctrl.signal})
     : fetch(API_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
                       body: JSON.stringify({accion:accion, rec:rec}), signal: ctrl&&ctrl.signal});
   return p.then(function(r){ return r.text(); })
@@ -260,7 +260,7 @@ function llamarApi(accion, rec){
       clearTimeout(t);
       var j; try{ j=JSON.parse(txt); }catch(e){ throw new Error('SIN_RED: respuesta no válida (revisa que Apps Script tenga acceso "Cualquier usuario")'); }
       if(!j.ok) throw new Error(j.error||'Error desconocido');
-      return accion==='datos' ? j.datos : j;
+      return accion==='datos' ? (j.sinCambios ? j : j.datos) : j;
     }, function(err){ clearTimeout(t); throw new Error('SIN_RED: '+(err&&err.message||err)); });
 }
 /* Imita google.script.run para que el resto de la app no cambie */
@@ -270,6 +270,7 @@ Runner.prototype.withFailureHandler=function(f){ this.fail=f; return this; };
 Runner.prototype._go=function(accion,rec){ var me=this;
   llamarApi(accion,rec).then(function(r){ me.ok&&me.ok(r); }, function(e){ me.fail&&me.fail(e); }); };
 Runner.prototype.getData=function(){ this._go('datos'); };
+Runner.prototype.getDataSi=function(si){ this._go('datos',{si:si}); };
 Runner.prototype.registrar=function(rec){ this._go('registrar',rec); };
 Runner.prototype.anular=function(rec){ this._go('anular',rec); };
 Runner.prototype.panel=function(rec){ this._go('panel',rec); };
@@ -413,18 +414,26 @@ function pintarEstado(){
 }
 function hayScript(){ return typeof google!=='undefined' && google.script && google.script.run; }
 
-function cargarDatos(cb){
+/* ligero=true: primero pregunta si algo cambió; si no, no descarga todo otra vez.
+   Cada 10 minutos (o al tocar Actualizar) se descarga todo aunque no haya cambios,
+   para que lo que se cambió a mano en la hoja también llegue. */
+var ultimaCompleta=0;
+function cargarDatos(cb, ligero){
   var cache=leer('datos',null);
   if(cache && !S.datos){ S.datos=cache; }
   if(!hayScript()){ enLinea=false; pintarEstado(); cb&&cb(); return; }
-  google.script.run
-    .withSuccessHandler(function(d){ S.datos=d; guardar('datos',d); enLinea=true; ultimaCarga=Date.now(); aplicarPendientesALotes(); pintarEstado(); cb&&cb(); })
+  var si=(ligero && S.datos && S.datos.sello && Date.now()-ultimaCompleta<600000) ? S.datos.sello : '';
+  var run=google.script.run
+    .withSuccessHandler(function(d){
+      enLinea=true; ultimaCarga=Date.now();
+      if(d && d.sinCambios){ pintarEstado(); return; }  /* nada nuevo: no se vuelve a dibujar la pantalla */
+      S.datos=d; guardar('datos',d); ultimaCompleta=Date.now(); aplicarPendientesALotes(); pintarEstado(); cb&&cb(); })
     .withFailureHandler(function(err){
       enLinea=false; pintarEstado();
       if(!S.datos){ var m=String(err&&err.message||err); document.getElementById('app').innerHTML='<div class="card">'+(/SIN_RED/.test(m)&&!navigator.onLine?'<b>Abre la app una vez con internet</b> para que se descarguen los lotes. Después ya funciona sin señal.<br><br>Mientras tanto usa la <b>hoja de registro en papel</b>.':'<b style="color:var(--red)">No pude leer la hoja.</b><br><br>'+esc(m)+'<br><br><small>Mándale una foto de esto a Karlo.</small>')+'<br><br><button class="big b1" onclick="actualizar()">Reintentar</button></div>'; return; }
       cb&&cb();
-    })
-    .getData();
+    });
+  if(si && run.getDataSi) run.getDataSi(si); else run.getData();
 }
 
 var enviando=false;
@@ -456,7 +465,7 @@ function refrescarSolo(){
     if($('modal')) return;
     if(document.querySelector('#app .hero')) menu();
     else if($('listaLotes') && $('busca')) filtrarLotes($('busca').value);
-  });
+  }, true);
 }
 document.addEventListener('visibilitychange', function(){ if(!document.hidden && Date.now()-ultimaCarga>60000) refrescarSolo(); });
 setInterval(function(){ if(Date.now()-ultimaCarga>=300000) refrescarSolo(); }, 60000);
@@ -556,12 +565,52 @@ function quienHtml(){
   return h+'</select>';
 }
 
+/* Versión de Code.gs que necesita esta app. Si el servidor tiene otra más vieja, se le avisa al encargado. */
+var SERVIDOR_ESPERADO='4.8';
+function versionMenor(a,b){ a=String(a||'0').split('.'); b=String(b).split('.'); for(var i=0;i<Math.max(a.length,b.length);i++){ var x=Number(a[i]||0), y=Number(b[i]||0); if(x!==y) return x<y; } return false; }
+function servidorViejoHtml(){
+  if(!esAdmin() || !S.datos || !versionMenor(S.datos.version, SERVIDOR_ESPERADO)) return '';
+  return '<div class="card err"><b>Falta actualizar el servidor.</b> La app es la versión '+SERVIDOR_ESPERADO+' pero el código de Apps Script '+(S.datos.version?'es la '+esc(S.datos.version):'es de antes de la 4.8')+'. '+
+    'Pega el Code.gs nuevo y luego: Implementar → Administrar implementaciones → ✏️ → Versión: Nueva versión → Implementar. Mientras tanto, algunas funciones nuevas no van a jalar.</div>';
+}
+/* ---------- registros que siguen en este celular sin enviarse ---------- */
+function pendInfo(){
+  var c=cola(), h=hist(), porId={}; h.forEach(function(x){ porId[x.id]=x; });
+  var lista=c.map(function(r){ var x=porId[r.id]||{}; return { t:x.t||Date.parse(r.ts)||Date.now(), resumen:x.resumen||r.tipo, nombre:r.nombre, ts:r.ts }; });
+  var desde=lista.reduce(function(m,x){ return Math.min(m,x.t); }, Date.now());
+  return { n:c.length, desde:desde, lista:lista };
+}
+function haceCuanto(t){ var m=Math.round((Date.now()-t)/60000); if(m<60) return m+' min'; var h=Math.floor(m/60); if(h<24) return h+' h'; return Math.floor(h/24)+' día(s)'; }
+function pendHtml(){
+  var p=pendInfo(); if(!p.n) return '';
+  var viejo=Date.now()-p.desde>3600000; /* más de 1 hora sin enviarse */
+  if(!viejo) return '<div class="warn">'+p.n+' registro(s) guardados en este celular, esperando internet. <button class="link" onclick="enviarPendientes()">Enviar ahora</button></div>';
+  return '<div class="card err"><b>'+p.n+' registro(s) llevan '+haceCuanto(p.desde)+' sin enviarse.</b> Solo están en este celular: si se pierde o se descompone, se pierden. '+
+    (esAdmin()?'Busca señal o wifi, o manda una copia a otro celular por si acaso.':'Busca señal o wifi, o mándaselos al encargado para que los capture en la hoja de papel.')+
+    '<div class="btnrow" style="margin-top:10px"><button class="b3" onclick="enviarPendientes();avisoCorto(\'Intentando enviar…\')">Enviar ahora</button><button class="b2" onclick="compartirPendientes()">Mandar copia</button></div></div>';
+}
+function textoPendientes(){
+  var p=pendInfo();
+  return 'Registros SIN ENVIAR del celular de '+S.nombre+' ('+p.n+'):\n'+p.lista.map(function(x){
+    return '• '+new Date(x.ts||x.t).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' · '+x.nombre+' · '+x.resumen; }).join('\n')+
+    '\n\nEncargado: si no llegan a la hoja, captúralos con "Hoja de papel".';
+}
+function compartirPendientes(){
+  var t=textoPendientes();
+  if(navigator.share){ navigator.share({ title:'Registros sin enviar', text:t }).catch(function(){}); return; }
+  window.open('https://wa.me/?text='+encodeURIComponent(t),'_blank');
+}
+function salirConPendientes(){
+  var p=pendInfo(); if(!p.n) return salir();
+  preguntar([], [], salir, { titulo:'Hay '+p.n+' registro(s) sin enviar', sub:'No se borran al salir: se mandan solos cuando este celular tenga internet. Solo no borres la app ni sus datos.', no:'Cancelar', si:'Salir' });
+}
 function menu(){
   S.desdeEnc=false;
   var n=cola().length, ar=miArea();
   var h='<div class="hola"><h2>'+esc(S.nombre)+'</h2>'+(ar!=='Todas'?'<div class="area">Área<b>'+esc(ar)+'</b></div>':(esAdmin()?'<div class="area">Área<b>Encargado</b></div>':''))+'</div>';
   if(S.papel) h+='<div class="warn"><b>Modo hoja de papel:</b> vas a poder poner la fecha y hora en que se hizo cada registro'+(esAdmin()?' y quién lo hizo':'')+'. <button class="link" onclick="S.papel=false;menu()">Salir de este modo</button></div>';
-  if(n) h+='<div class="warn">'+n+' registro(s) guardados en este celular, esperando internet. <button class="link" onclick="enviarPendientes()">Enviar ahora</button></div>';
+  h+=servidorViejoHtml();
+  if(n) h+=pendHtml();
   h+=llegadasHtml();
   /* El encargado tiene como tarea principal el corte: para él el botón grande es Corté piezas */
   h+=esAdmin() ? '<button class="hero" onclick="corte()">'+ic('tijeras',34)+'<span><b>Corté piezas</b><small>Dejé piezas nuevas en el estante</small></span></button>'
@@ -578,7 +627,7 @@ function menu(){
      '<button onclick="misRegistros()">'+ic('registros')+'Mis registros</button>'+
      '<button onclick="S.papel=true;menu()">'+ic('paper')+'Hoja de papel</button>'+
      '<button onclick="actualizar()">'+ic('refresh')+'Actualizar</button>'+
-     '<button onclick="salir()">'+ic('salir')+'Salir</button></div>';
+     '<button onclick="salirConPendientes()">'+ic('salir')+'Salir</button></div>';
   h+='<button class="link tema" onclick="cambiarTema()">'+TEMAS[leer('tema','claro')]+'</button>';
   if(!esInstalada() && (promptInstalar || esIphone())) h+='<button class="big b4" onclick="instalar()">'+ic('install',28)+'<span>Instalar la app en este celular<small>Para abrirla aunque no haya internet</small></span></button>';
   h+='<div class="ver">Versión '+VERSION+(S.datos&&S.datos.actualizado?' · datos del '+new Date(S.datos.actualizado).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'')+'</div>';
@@ -640,7 +689,7 @@ function recibi(k, otra){
     encolar(rec, 'Recibí '+n+(n!==x.conf?' de '+x.conf:'')+' · '+x.nom+' · '+corto(x.l.folio), 'recibido');
   };
 }
-function actualizar(){ pantalla('<p>Actualizando…</p>'); cargarDatos(inicio); }
+function actualizar(){ pantalla('<p>Actualizando…</p>'); ultimaCompleta=0; cargarDatos(menu); }
 
 /* ---------- áreas (Corte / Lijado / Pintura) ---------- */
 var AREAS=['Corte','Lijado','Pintura'];
@@ -1378,6 +1427,7 @@ function misRegistros(){
   var pend=hist().filter(function(x){ return x.estado==='pendiente' && (x.nombre===S.nombre || x.por===S.nombre); }).sort(function(a,b){ return b.t-a.t; });
   var html='<button class="back" onclick="menu()">'+ic('back',18,0,3)+'Inicio</button><h2>'+(esAdmin()?'Registros de todos':'Mis registros de hoy')+'</h2>'+
     '<p class="sub">'+(esAdmin()?'Los últimos 7 días, de todos. Puedes anular cualquiera.':'Si te equivocaste, puedes anular un registro durante los primeros '+minutosAnular()+' minutos. Después, pídeselo al encargado.')+'</p>';
+  if(pend.length) html+='<button class="big b2" onclick="compartirPendientes()">'+ic('registros',28)+'<span>Mandar copia de los que no se han enviado<small>Por WhatsApp o a otro celular, por si este se pierde</small></span></button>';
   pend.forEach(function(x){ html+=regHtml({id:x.id, texto:x.resumen, cuando:new Date(x.t).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}), nombre:x.nombre, puede:true}, '<span class="tag t-Sin">sin enviar</span>'); });
   html+='<div id="regsSrv"><p class="sub">Cargando registros…</p></div>';
   pantalla(html);
