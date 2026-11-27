@@ -238,6 +238,10 @@
   .varios{margin-top:12px}.varios .vp{border-top:1px solid var(--line);padding:6px 0}.varios .vp:first-of-type{border-top:0}
   .ok-suma{color:var(--ok);font-weight:700;margin-top:8px;display:flex;align-items:center;gap:6px}
   .porti>b{display:flex;align-items:center;gap:8px}
+  .adel-aviso{display:flex;align-items:center;gap:12px;margin:10px 0}.adel-aviso>div{flex:1;min-width:0}.adel-aviso small{display:block;color:var(--mu);margin-top:3px;line-height:1.4}
+  .adel-aviso>svg{color:var(--yx);flex:none}.adel-aviso .chico{flex:none;padding:10px 16px;border-radius:10px;font-weight:700}
+  .adel-fila{align-items:center;gap:12px}.adel-fila>div{flex:1}.adel-prev{display:flex;justify-content:center;margin:4px 0 2px}.adel-prev .sil{width:76px;height:76px}
+  .seg.col1{flex-direction:column}
   .porti .porti-r{border-top:1px solid var(--line);padding-top:10px;margin-top:10px;line-height:1.45}
   .hide{display:none}
   .ver{font-size:12px;color:var(--mu);text-align:center;margin-top:14px}
@@ -254,7 +258,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.12';
+var VERSION = '4.13';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -488,7 +492,19 @@ window.addEventListener('offline',function(){ enLinea=false; pintarEstado(); });
 function aplicarPendientesALotes(){
   if(!S.datos) return;
   cola().forEach(function(r){ if(r.tipo==='recibido') sumarRecib(r.folio,r.pieza,r.fase,Number(r.enviadas)||0); });
-  cola().forEach(function(r){ if(r.tipo==='avance') (r.items||[{pieza:r.pieza,fase:r.fase}]).concat(r.manda?[{pieza:r.pieza,fase:r.manda}]:[]).forEach(function(x){ avanzarLocal(r.folio,x.pieza,x.fase); sumarHecho(r.folio,x.pieza,x.fase,Number(r.cantidad)||0); }); });
+  cola().forEach(aplicarRecLocal);
+}
+/* Fases que mueve un registro de avance (normal, "Terminé área", "También las mandé" o piezas adelantadas) */
+function fasesDeRec(r){
+  if(r.adel) return (r.adel.fases||[]).map(function(x){ return {pieza:r.pieza, fase:x.fase, cant:Number(x.cant)||0}; });
+  return (r.items||[{pieza:r.pieza,fase:r.fase}]).concat(r.manda?[{pieza:r.pieza,fase:r.manda}]:[]).map(function(x){ return {pieza:x.pieza, fase:x.fase, cant:Number(r.cantidad)||0}; });
+}
+/* Mientras no llega al servidor, el registro ya se refleja en este celular */
+function aplicarRecLocal(r){
+  if(!S.datos) return;
+  if(r.tipo==='avance') fasesDeRec(r).forEach(function(x){ avanzarLocal(r.folio,x.pieza,x.fase); sumarHecho(r.folio,x.pieza,x.fase,x.cant); });
+  if(r.tipo==='avance' && r.adel) sumarAdelLocal(r.adel.modelo,r.pieza,r.adel.faseOrigen,r.adel.color,-(Number(r.cantidad)||0));
+  if(r.tipo==='adelantada') sumarAdelLocal(r.modelo,r.pieza,r.fase,r.color,(r.mov==='Baja'?-1:1)*(Number(r.cantidad)||0));
 }
 function avanzarLocal(folio,pieza,fase){
   var l=(S.datos.lotes||[]).filter(function(x){return x.folio===folio;})[0];
@@ -579,7 +595,7 @@ function quienHtml(){
 
 /* Versión MÍNIMA de Code.gs con la que esta app funciona completa. Si el servidor es más viejo, se le avisa al encargado.
    (Solo se sube cuando la app de verdad necesita algo nuevo del servidor.) */
-var SERVIDOR_ESPERADO='4.10';
+var SERVIDOR_ESPERADO='4.13';
 function versionMenor(a,b){ a=String(a||'0').split('.'); b=String(b).split('.'); for(var i=0;i<Math.max(a.length,b.length);i++){ var x=Number(a[i]||0), y=Number(b[i]||0); if(x!==y) return x<y; } return false; }
 function servidorViejoHtml(){
   if(!esAdmin() || !S.datos || !versionMenor(S.datos.version, SERVIDOR_ESPERADO)) return '';
@@ -634,6 +650,7 @@ function menu(){
      (esAdmin()?'<button class="tile" onclick="lotes()">'+ic('avance',28)+'<b>Avance de un lote</b></button>':'')+
      (S.datos.almacen?'<button class="tile" onclick="almacen(null,\'Salida\')">'+ic('brocha',28)+'<b>Pintura y ferretería</b></button>':'')+
      (S.datos.terminados&&esAdmin()?'<button class="tile" onclick="terminados()">'+ic('cajaok',28)+'<b>Urnas terminadas</b></button>':'')+
+     (esAdmin()?'<button class="tile" onclick="adelantadas()">'+ic('box',28)+'<b>Piezas adelantadas</b></button>':'')+
      '<button class="tile" onclick="problema()"><span class="roja">'+ic('alert',28)+'</span><b>Reportar problema</b></button>'+
      '</div>';
   h+=barrasAvance();
@@ -1113,6 +1130,7 @@ function detalleFase(i,pieza){
     h+='<button class="'+(S.pieza===p[0]?'on':'')+'" onclick="detalleFase('+i+',\''+p[0]+'\')"><b class="pz">'+p[1]+'</b>'+trackPieza(l,p[0])+'<small>'+esc(est)+'</small>'+(function(){ var x=llegadaDe(l,p[0])[0]; return x?'<small class="pz-lleg">Te mandaron '+x.pend+'</small>':''; })()+'</button>';
   });
   h+='</div>';
+  h+=adelAvisoHtml(l,i);
   var lista=fasesDe(l,S.pieza), base=fasesBase(l,S.pieza), act=l.av[S.pieza], ci=base.indexOf(act);
   var termino = base.length && ci===base.length-1;
   /* siguiente fase de su área después de la fase en que va la pieza */
@@ -1230,6 +1248,122 @@ function guardarAvance(){
   preguntar([['Lote',corto(l.folio)+' · Semana '+l.semana],['Pieza',pz],['Fase que terminó',nomFase(fase)],['Piezas que pasaron',cant]].concat(lineasVarios).concat(dan?[['Dañadas',dan]]:[]).concat(torn?[['Tornillos que se descuentan',torn+' ('+(Math.round(torn/T.porBolsa*100)/100)+' '+(T.porBolsa>1?'bolsas':'pzas')+')']]:[]),
     av, function(){ if(torn) descontarTornillosLocal(torn/T.porBolsa); encolar(rec, corto(l.folio)+' · '+pz+' · '+nomFase(fase)+' · '+cant+(rec.reparto?' (entre varios: '+rec.reparto.map(function(x){ return x.nombre+' '+x.cantidad; }).join(', ')+')':'')+(rec.manda?' · y las mandó':''), 'avance'); S.variosOn=false; });
 }
+/* ---------- piezas adelantadas: sobrantes o devoluciones guardadas en el estante ----------
+   El encargado las da de alta; al abrir un lote del mismo modelo, la app ofrece usarlas. */
+function nomPieza(p){ return ({Wakal:'Huacal'})[p]||p; }
+function adelStock(){ return (S.datos&&S.datos.adelantadas)||[]; }
+function adelDe(modelo,pieza){ return adelStock().filter(function(a){ return norm(a.modelo)===norm(modelo) && a.pieza===pieza && a.cantidad>0; }); }
+function sumarAdelLocal(modelo,pieza,fase,color,cant){
+  if(!S.datos) return; var A=S.datos.adelantadas=S.datos.adelantadas||[]; color=color||'Sin pintar';
+  var x=A.filter(function(a){ return a.modelo===modelo && a.pieza===pieza && a.fase===fase && a.color===color; })[0];
+  if(!x){ x={modelo:modelo,pieza:pieza,fase:fase,color:color,cantidad:0}; A.push(x); }
+  x.cantidad+=cant; S.datos.adelantadas=A.filter(function(a){ return a.cantidad>0; });
+}
+function adelAvisoHtml(l,i){
+  var ad=adelDe(l.modelo,S.pieza); if(!ad.length) return '';
+  var n=ad.reduce(function(a,x){ return a+x.cantidad; },0);
+  return '<div class="card adel-aviso">'+ic('estante',26)+'<div><b>En el estante hay '+n+' '+esc(nomPieza(S.pieza))+' adelantadas</b><small>'+
+    ad.map(function(a){ return a.cantidad+' que ya llegaron a '+esc(nomFase(a.fase))+' · '+esc(a.color); }).join('<br>')+'</small></div>'+
+    '<button class="b3 chico" onclick="usarAdel('+i+',0)">Usar</button></div>';
+}
+function colorDistinto(a,b){ return norm(a)!=='sin pintar' && norm(a).split(' ')[0]!==norm(b).split(' ')[0]; }
+function usarAdel(i,k){
+  var l=S.datos.lotes[i], ad=adelDe(l.modelo,S.pieza), a=ad[k]; if(!a) return detalleFase(i,S.pieza);
+  S.lote=l; S.loteIdx=i; S.adelSel={i:i,k:k,a:a};
+  var base=fasesBase(l,S.pieza), fi=base.indexOf(a.fase), cuentan=fi>=0?base.slice(0,fi+1):base.slice();
+  var pinta=colorDistinto(a.color,l.color), def=a.fase;
+  if(pinta){ var ip=-1; cuentan.some(function(f,j){ if(areaDeFase(S.pieza,f)==='Pintura'){ ip=j; return true; } }); if(ip>0) def=cuentan[ip-1]; }
+  if(cuentan.indexOf(def)<0) def=cuentan[cuentan.length-1];
+  var h='<button class="back" onclick="detalleFase('+i+',\''+S.pieza+'\')">'+ic('back',18,0,3)+'Lote</button>'+
+    '<div class="lotebox con-sil">'+silTile(l.modelo,l.color,56)+'<div><h2 class="lb-nom">'+esc(corto(l.folio))+'</h2><div class="lb-sem">'+l.cantidad+' piezas · '+esc(nomPieza(S.pieza))+'</div></div></div>'+
+    '<h2>Usar piezas adelantadas</h2>';
+  if(ad.length>1){ h+='<label class="paso"><i>1</i>¿Cuáles?</label><div class="seg col1">'+ad.map(function(x,j){ return '<button class="'+(j===k?'on':'')+'" onclick="usarAdel('+i+','+j+')"><b>'+x.cantidad+'</b> · llegaron a '+esc(nomFase(x.fase))+' · '+esc(x.color)+'</button>'; }).join('')+'</div>'; }
+  else h+='<div class="card adel-aviso">'+silTile(l.modelo,a.color==='Sin pintar'?'Sin pintar':a.color,44)+'<div><b>'+a.cantidad+' '+esc(nomPieza(S.pieza))+' en el estante</b><small>Ya llegaron a '+esc(nomFase(a.fase))+' · '+esc(a.color)+'</small></div></div>';
+  h+='<label class="paso"><i>'+(ad.length>1?2:1)+'</i>¿Cuántas usas en este lote?</label>'+stepper('cant',Math.min(a.cantidad,l.cantidad),true);
+  h+='<label class="paso"><i>'+(ad.length>1?3:2)+'</i>¿Hasta qué fase cuentan en este lote?</label><select id="adFase" aria-label="Hasta qué fase cuentan">'+
+    cuentan.map(function(f){ return '<option value="'+esc(f)+'"'+(f===def?' selected':'')+'>'+esc(nomFase(f))+'</option>'; }).join('')+'</select>';
+  if(pinta) h+='<div class="warn">Estas piezas están pintadas de <b>'+esc(a.color)+'</b> y el lote es <b>'+esc(l.color)+'</b>: se vuelven a pintar. Por eso cuentan hasta <b>'+esc(nomFase(def))+'</b>. Si las van a repintar desde otra fase, cámbiala.</div>';
+  h+='<p class="sub">Se registran como ya hechas en todas las fases hasta la que elijas, y se descuentan del estante.</p>';
+  h+='<div class="fijo"><div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarUsoAdel()">'+ic('check',24,0,3)+'<span>Usar en este lote</span></button></div></div>';
+  pantalla(h);
+}
+function guardarUsoAdel(){
+  var sel=S.adelSel, l=S.datos.lotes[sel.i], a=sel.a, cant=parseInt($('cant').value,10)||0, fase=$('adFase').value;
+  if(cant<=0){ $('err').textContent='Escribe cuántas usas (más de 0).'; return; }
+  if(cant>a.cantidad){ $('err').textContent='En el estante solo hay '+a.cantidad+'.'; return; }
+  var base=fasesBase(l,S.pieza), hi=base.indexOf(fase), av=[];
+  var fases=base.slice(0,hi+1).map(function(f){ return {fase:f, cant:Math.min(cant, Math.max(0, l.cantidad-hecho(l,S.pieza,f)))}; });
+  var menos=fases.filter(function(x){ return x.cant<cant; });
+  fases=fases.filter(function(x){ return x.cant>0; });
+  if(!fases.length){ $('err').textContent='Este lote ya tiene registradas todas esas fases.'; return; }
+  if(menos.length) av.push('En '+menos.slice(0,4).map(function(x){ return nomFase(x.fase); }).join(', ')+(menos.length>4?' y otras':'')+' el lote ya tenía piezas registradas: ahí solo se suman las que faltan.');
+  if(cant>l.cantidad) av.push('Usas '+cant+' y el lote es de '+l.cantidad+'.');
+  var rec={ id:uid(), tipo:'avance', nombre:S.nombre, ts:fechaRegistro(), folio:l.folio, pieza:S.pieza, fase:fase, cantidad:cant, danadas:0, comentario:'',
+            adel:{ modelo:a.modelo, faseOrigen:a.fase, color:a.color, fases:fases } };
+  preguntar([['Lote',corto(l.folio)],['Pieza',nomPieza(S.pieza)],['Adelantadas que usas',cant],['Cuentan como hechas hasta',nomFase(fase)]], av,
+    function(){ encolar(rec, corto(l.folio)+' · Usó '+cant+' adelantadas · '+nomPieza(S.pieza)+' · hasta '+nomFase(fase), 'avance'); },
+    { titulo:'¿Usar estas piezas?', sub:'Se descuentan del estante', si:ic('check',22,0,3)+'Sí, usar' });
+}
+/* Pantalla del encargado: lo que hay en el estante */
+function adelantadas(){
+  var A=adelStock().slice().sort(function(x,y){ return x.modelo<y.modelo?-1:x.modelo>y.modelo?1:0; });
+  var h='<button class="back" onclick="menu()">'+ic('back',18,0,3)+'Inicio</button><h2>Piezas adelantadas</h2>'+
+    '<p class="sub">Piezas que sobraron o regresaron y se guardaron en el estante. Cuando alguien abre un lote del mismo modelo, la app le ofrece usarlas.</p>'+
+    '<button class="big b1" onclick="altaAdel()">'+ic('plus',28)+'<span>Guardar piezas en el estante<small>Sobrantes, devoluciones o urnas a medio proceso</small></span></button>';
+  if(!A.length) h+='<div class="card">No hay piezas adelantadas en el estante.</div>';
+  S.adelLista=A;
+  A.forEach(function(a,k){
+    h+='<div class="card reg adel-fila">'+silTile(a.modelo,a.color,44)+'<div><b>'+a.cantidad+' · '+esc(nomPieza(a.pieza))+'</b> · '+esc(a.modelo)+'<br><small>Llegaron a '+esc(nomFase(a.fase))+' · '+esc(a.color)+'</small></div>'+
+       '<button class="bR chico" onclick="altaAdel('+k+',\'Baja\')">Sacar</button></div>';
+  });
+  h+='<p class="sub">Todo queda en la pestaña <b>Adelantadas</b> de la hoja.</p>';
+  pantalla(h);
+}
+/* Alta (guardar en el estante) o baja (sacar: se dañaron o se contaron mal) */
+function altaAdel(k,mov){
+  mov=mov||'Alta';
+  if(mov==='Baja'){ var a=S.adelLista[k]; S.ad={mov:'Baja', modelo:a.modelo, pieza:a.pieza, fase:a.fase, color:a.color, max:a.cantidad}; }
+  else if(!S.ad || S.ad.mov!=='Alta' || k===undefined){ var m0=(S.datos.modelos||[])[0]; S.ad={mov:'Alta', modelo:m0?m0.nombre:'', pieza:'Wakal', fase:'', color:'Sin pintar'}; }
+  pintarAltaAdel();
+}
+function modeloInfo(n){ return (S.datos.modelos||[]).filter(function(m){ return m.nombre===n; })[0]||{nombre:n,techo:false}; }
+function fasesPara(modelo,pieza){
+  var t=modeloInfo(modelo).techo; if(pieza==='Techo' && !t) return [];
+  return (S.datos.fases[pieza]||[]).filter(function(f){ return t || !/\(si lleva\)/i.test(f); });
+}
+function pintarAltaAdel(){
+  var d=S.ad, baja=d.mov==='Baja';
+  var h='<button class="back" onclick="adelantadas()">'+ic('back',18,0,3)+'Piezas adelantadas</button><h2>'+(baja?'Sacar del estante':'Guardar piezas en el estante')+'</h2>';
+  if(baja){
+    h+='<div class="card adel-aviso">'+silTile(d.modelo,d.color,44)+'<div><b>'+esc(nomPieza(d.pieza))+' · '+esc(d.modelo)+'</b><small>Llegaron a '+esc(nomFase(d.fase))+' · '+esc(d.color)+' · hay '+d.max+'</small></div></div>'+
+       '<label class="paso"><i>1</i>¿Cuántas sacas?</label>'+stepper('cant',0,true)+'<label>¿Por qué? (se dañaron, se contaron mal…)</label><input type="text" id="adNota" maxlength="150">';
+  } else {
+    var piezas=PIEZAS.filter(function(p){ return p[0]!=='Techo' || modeloInfo(d.modelo).techo; });
+    if(!piezas.some(function(p){ return p[0]===d.pieza; })) d.pieza='Wakal';
+    var fs=fasesPara(d.modelo,d.pieza); if(fs.indexOf(d.fase)<0) d.fase=fs[0]||'';
+    h+='<div class="adel-prev">'+silTile(d.modelo,d.color,56)+'</div>';
+    h+='<label class="paso"><i>1</i>Modelo</label><select id="adMod" onchange="S.ad.modelo=this.value;pintarAltaAdel()">'+(S.datos.modelos||[]).map(function(m){ return '<option'+(m.nombre===d.modelo?' selected':'')+'>'+esc(m.nombre)+'</option>'; }).join('')+'</select>';
+    h+='<label class="paso"><i>2</i>Pieza</label><div class="seg piezas"'+(piezas.length===3?' style="grid-template-columns:1fr 1fr 1fr"':'')+'>'+piezas.map(function(p){ return '<button class="'+(p[0]===d.pieza?'on':'')+'" onclick="S.ad.pieza=\''+p[0]+'\';pintarAltaAdel()"><b class="pz">'+p[1]+'</b></button>'; }).join('')+'</div>';
+    h+='<label class="paso"><i>3</i>¿Hasta qué fase llegaron? (la última que ya tienen hecha)</label><select id="adFase" onchange="S.ad.fase=this.value">'+fs.map(function(f){ return '<option value="'+esc(f)+'"'+(f===d.fase?' selected':'')+'>'+esc(nomFase(f))+'</option>'; }).join('')+'</select>';
+    h+='<label class="paso"><i>4</i>Color</label><select id="adColor" onchange="S.ad.color=this.value;pintarAltaAdel()">'+['Sin pintar'].concat(S.datos.colores||[]).map(function(c){ return '<option'+(c===d.color?' selected':'')+'>'+esc(c)+'</option>'; }).join('')+'</select>';
+    h+='<label class="paso"><i>5</i>¿Cuántas?</label>'+stepper('cant',d.cant||0,true)+'<label>Nota (opcional: de qué pedido, devolución…)</label><input type="text" id="adNota" maxlength="150" value="'+esc(d.nota||'')+'">';
+  }
+  h+='<div class="fijo"><div id="err" class="err"></div><div class="btnrow"><button class="'+(baja?'bR':'b3')+'" onclick="guardarAltaAdel()">'+ic('check',24,0,3)+'<span>'+(baja?'Sacar del estante':'Guardar en el estante')+'</span></button></div></div>';
+  pantalla(h);
+  if(!baja){ $('cant').oninput=function(){ S.ad.cant=parseInt(this.value,10)||0; }; S.alCambiar=function(){ S.ad.cant=parseInt($('cant').value,10)||0; }; $('adNota').oninput=function(){ S.ad.nota=this.value; }; }
+}
+function guardarAltaAdel(){
+  var d=S.ad, cant=parseInt($('cant').value,10)||0, nota=$('adNota').value.trim();
+  if(d.mov!=='Baja' && $('adFase')) d.fase=$('adFase').value;
+  if(cant<=0){ $('err').textContent='Escribe cuántas piezas (más de 0).'; return; }
+  if(d.mov==='Baja' && cant>d.max){ $('err').textContent='Solo hay '+d.max+' en el estante.'; return; }
+  if(!d.modelo || !d.fase){ $('err').textContent='Elige el modelo y la fase.'; return; }
+  var rec={ id:uid(), tipo:'adelantada', nombre:S.nombre, ts:new Date().toISOString(), mov:d.mov, modelo:d.modelo, pieza:d.pieza, fase:d.fase, color:d.color||'Sin pintar', cantidad:cant, nota:nota };
+  var txt=(d.mov==='Baja'?'Sacó del estante ':'Guardó en el estante ')+cant+' · '+d.modelo+' · '+nomPieza(d.pieza)+' · '+nomFase(d.fase)+' · '+rec.color;
+  preguntar([['Modelo',d.modelo],['Pieza',nomPieza(d.pieza)],['Llegaron a',nomFase(d.fase)],['Color',rec.color],[d.mov==='Baja'?'Salen':'Entran',cant]], [],
+    function(){ S.ad=null; encolar(rec, txt, 'adelantada'); }, { titulo:d.mov==='Baja'?'¿Sacar del estante?':'¿Guardar en el estante?', sub:'Revisa que la cantidad sea correcta', si:d.mov==='Baja'?'Sí, sacar':ic('check',22,0,3)+'Sí, guardar', peligro:d.mov==='Baja' });
+}
+
 /* ---------- "Lo hicimos entre varios": uno registra y cada quien queda con su parte ---------- */
 /* Solo para Lijado (ahí trabajan varios en el mismo lote). Es opcional: si no se toca, se registra como siempre. */
 var AREA_VARIOS='Lijado';
@@ -1332,7 +1466,7 @@ function porTiMal(k){
 var NIVEL={ 'CRÍTICO':['rojo',dot('rojo'),'Queda poco'], 'POR AGOTARSE':['amarillo',dot('amarillo'),'Ya casi se acaba'], 'ESTABLE':['verde',dot('verde'),'Hay suficiente'] };
 var NIVEL_EST={ 'CORTAR YA':['rojo',dot('rojo'),'Hay que cortar ya'], 'CORTAR PRONTO':['amarillo',dot('amarillo'),'Cortar pronto'], 'OK':['verde',dot('verde'),'Hay suficiente'] };
 /* ---------- siluetas de los modelos (dibujadas del catálogo), pintadas del color del lote ---------- */
-var COLOR_URNA={ chocolate:'#2B2522', blanco:'#F6F5F1', blanca:'#F6F5F1', rosa:'#E5679A', celeste:'#6E9FE3', vintage:'#B3AE93',
+var COLOR_URNA={ sin:'#CDB28A', chocolate:'#2B2522', blanco:'#F6F5F1', blanca:'#F6F5F1', rosa:'#E5679A', celeste:'#6E9FE3', vintage:'#B3AE93',
   ocre:'#C98A3C', cherry:'#6E2B2B', nogal:'#8A6440', gris:'#6F6B69', arena:'#D3C7B9' };
 function tono(hex,f){ /* f<0 oscurece, f>0 aclara */
   var n=parseInt(hex.slice(1),16), r=n>>16, g=(n>>8)&255, b=n&255;
@@ -1564,7 +1698,7 @@ function encolar(rec, resumen, tipo){
   if(S.papel && $('quien') && $('quien').value && $('quien').value!==S.nombre){ rec.capturo=S.nombre; rec.nombre=$('quien').value; resumen=rec.nombre+' · '+resumen; }
   if(S.firma) rec.firma=S.firma;
   var c=cola(); c.push(rec); setCola(c); histAgregar(rec,resumen);
-  if(rec.tipo==='avance') (rec.items||[{pieza:rec.pieza,fase:rec.fase}]).forEach(function(x){ avanzarLocal(rec.folio,x.pieza,x.fase); sumarHecho(rec.folio,x.pieza,x.fase,Number(rec.cantidad)||0); });
+  aplicarRecLocal(rec);
   S.ultimo=tipo;
   pantalla('<div class="ok"><div class="icon" style="color:var(--y)">'+ic('clock',72,0,1.6)+'</div><h2>Enviando…</h2><p class="sub">'+esc(resumen)+'</p></div>');
   if(!hayScript()){ confirmar(false,resumen); return; }
@@ -1589,6 +1723,7 @@ function confirmar(enviado,resumen){
   else if(S.ultimo==='empacado'){ h+='<button class="big b1" onclick="empacado()">Registrar otro empacado</button>'; }
   else if(S.ultimo==='almacen'){ h+='<button class="big b1" onclick="almacen(null,\'Salida\')">Tomé otro material</button>'; }
   else if(S.ultimo==='entrada'){ h+='<button class="big b1" onclick="entrada()">Registrar otra entrada</button>'+(S.desdeEnc?'<button class="big b2" onclick="vistaEncargado()">'+ic('key')+'Vista de encargado</button>':''); }
+  else if(S.ultimo==='adelantada'){ h+='<button class="big b1" onclick="altaAdel()">Guardar otras piezas</button><button class="big b2" onclick="adelantadas()">'+ic('estante')+'Ver piezas adelantadas</button>'; }
   else if(S.ultimo==='terminado'){ h+='<button class="big b1" onclick="terminados()">Otro movimiento de terminados</button>'; }
   else if(S.ultimo==='problema'){ h+='<button class="big b1" onclick="problema()">Reportar otro problema</button>'; }
   h+='<button class="big b2" onclick="misRegistros()">'+ic('registros')+'Ver mis registros de hoy</button>';
