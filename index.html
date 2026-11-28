@@ -255,6 +255,10 @@
   .rg-cuerpo{padding:0 10px 4px;border-top:1px solid var(--line)}.rg-cuerpo .card.reg{border:0;border-bottom:1px solid var(--line);border-radius:0;margin:0;padding-left:4px;padding-right:4px}
   .rg-cuerpo .card.reg:last-child{border-bottom:0}
   .lleg-lote{border-top:1px solid var(--line)}
+  .nuevo{display:inline-block;background:var(--nar);color:#fff;font-size:12px;font-weight:700;letter-spacing:.4px;border-radius:999px;padding:3px 9px;margin-left:8px;vertical-align:middle;flex:none}
+  .lote.destacado{border:2px solid var(--nar);background:var(--narS)}
+  .oc.pedido.lleg{color:var(--narTx);display:flex;align-items:center;gap:6px}
+  .t-lleg{display:inline-block;max-width:100%;white-space:normal;line-height:1.35}.t-lleg svg.ic{display:inline-block;vertical-align:-3px;margin-right:4px}
   .lleg-cab2{width:100%;display:flex;align-items:center;gap:10px;padding:10px 2px;text-align:left;background:none;min-height:58px}
   .lleg-cab2 .sil{width:44px;height:44px}.lleg-cab2>svg{flex:none;color:var(--narTx);transition:transform .15s}.lleg-lote.abierto .lleg-cab2>svg{transform:rotate(180deg)}
   .lleg-lote .lleg-fila{padding-left:14px}.lleg-lote .lleg-fila:first-of-type{border-top:1px dashed var(--line)}
@@ -263,7 +267,7 @@
   .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;margin:8px 0 2px;-webkit-overflow-scrolling:touch}
   .chip{flex:none;display:flex;align-items:center;gap:6px;border:2px solid var(--line);background:var(--card);color:var(--tx);border-radius:999px;padding:8px 14px;font-weight:700;font-size:15px;min-height:44px;white-space:nowrap}
   .chip.on{background:var(--y);border-color:var(--y);color:#fff}
-  .filtros{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.filtros select{flex:1;min-width:140px;margin:0}
+  .filtros{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.filtros select{flex:1;min-width:140px;margin:0;font-size:15px;padding-left:10px;padding-right:6px}
   select.filtro-sel{margin:8px 0}
   .porti .porti-r{border-top:1px solid var(--line);padding-top:10px;margin-top:10px;line-height:1.45}
   .hide{display:none}
@@ -281,7 +285,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.21';
+var VERSION = '4.22';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -735,12 +739,13 @@ function llegadasHtml(){
   /* Agrupado por lote: una tarjeta con la silueta; al tocarla se ven las piezas y su botón Recibí */
   var orden=[], grupos={}; S.llegAbiertas=S.llegAbiertas||{};
   ls.forEach(function(x,k){ var f=x.l.folio; if(!grupos[f]){ grupos[f]=[]; orden.push(f); } grupos[f].push(k); });
+  orden.sort(function(a,b){ var A=envioInfo(a), B=envioInfo(b); return (B?B.t:0)-(A?A.t:0); }); /* lo más reciente primero */
   S.llegGrupos=orden;
   orden.slice(0,8).forEach(function(f,g){
     var ks=grupos[f], l=ls[ks[0]].l, n=ks.reduce(function(a,k){ return a+ls[k].conf; },0);
     var ab = orden.length===1 || !!S.llegAbiertas[f];
     h+='<div class="lleg-lote'+(ab?' abierto':'')+'"><button class="lleg-cab2" aria-expanded="'+ab+'" onclick="toggleLleg('+g+')">'+silTile(l.modelo,l.color,34)+
-       '<span class="lleg-t"><b>'+esc(corto(l.folio))+'</b><small>'+n+' piezas · '+ks.map(function(k){ return esc(ls[k].nom)+' '+ls[k].conf; }).join(', ')+'</small></span>'+ic('down',22,0,2.5)+'</button>';
+       '<span class="lleg-t"><b>'+esc(corto(l.folio))+(function(){ var e=envioInfo(f); return e&&esNuevo(e.t)?'<span class="nuevo">NUEVO</span>':''; })()+'</b><small>'+n+' piezas · '+ks.map(function(k){ return esc(ls[k].nom)+' '+ls[k].conf; }).join(', ')+(function(){ var e=envioInfo(f); return e?' · '+haceTxt(e.t)+(e.por.length?' por '+esc(e.por.join(', ')):''):''; })()+'</small></span>'+ic('down',22,0,2.5)+'</button>';
     if(ab) ks.forEach(function(k){ var x=ls[k];
       h+='<div class="lleg-fila"><button class="lleg-info" onclick="S.verListos=false;detalle('+x.i+',\''+x.pieza+'\')"><span class="lleg-n">'+x.conf+'</span><span class="lleg-t"><b>'+esc(x.nom)+'</b><small>para '+esc(nomFase(x.fase))+'</small></span></button>'+
          '<button class="lleg-ok" onclick="recibi('+k+')">'+ic('check',20,0,3)+'Recibí</button></div>'; });
@@ -873,9 +878,23 @@ function filtrosLotes(){
   if(atr) h+='<div class="chips"><button class="chip'+(S.fAtrL?' on':'')+'" id="fAtrL" onclick="S.fAtrL=!S.fAtrL;this.className=\'chip\'+(S.fAtrL?\' on\':\'\');filtrarLotes($(\'busca\').value)">'+dot('rojo')+' Solo atrasados ('+atr+')</button></div>';
   return h;
 }
+/* Tarjeta de un lote en la lista. destacado = le mandaron piezas a mi área: va hasta arriba, en naranja */
+function loteCard(i,destacado){
+  var l=S.datos.lotes[i], x=llegadaDe(l), n=x.reduce(function(a,y){ return a+y.pend; },0), e=n?envioInfo(l.folio):null;
+  return '<button class="lote'+(destacado?' destacado':'')+'" onclick="detalle('+i+')"><div class="fila">'+silTile(l.modelo,l.color,42)+'<b>'+esc(corto(l.folio))+'</b>'+(e&&esNuevo(e.t)?'<span class="nuevo">NUEVO</span>':tagEstado(l.estado))+ic('chev',18)+'</div>'+
+    '<span class="cant">'+l.cantidad+' piezas</span>'+
+    (n?'<span class="tag t-lleg">'+ic('entra',16)+' Te mandaron '+n+' piezas'+(e?' · '+haceTxt(e.t)+(e.por.length?' · '+esc(e.por.join(', ')):''):'')+'</span>':'')+trackLote(l)+'</button>';
+}
+/* Cuándo y quién mandó lo último de ese lote (registros "Mandar…" de las últimas 24 h) */
+function envioInfo(folio){
+  var t=0, por=[]; recientes().forEach(function(x){ if(x.folio===folio && /^mandar/i.test(nomFase(x.fase))){ if(x.t>t) t=x.t; if(por.indexOf(x.nombre)<0) por.push(x.nombre); } });
+  return t?{t:t, por:por}:null;
+}
+function esNuevo(t){ return t && Date.now()-t < 3*3600000; }
+function haceTxt(t){ var m=Math.max(0,Math.round((Date.now()-t)/60000)); if(m<1) return 'ahora'; if(m<60) return 'hace '+m+' min'; var h=Math.floor(m/60); if(h<24) return 'hace '+h+' h'; return 'hace '+Math.floor(h/24)+' día(s)'; }
 function filtrarLotes(f){
   f=norm(f).split(/\s+/).filter(Boolean);
-  var grupos={}, orden=[], h='';
+  var grupos={}, orden=[], h='', arriba=[];
   S.datos.lotes.forEach(function(l,i){
     var t=norm(l.folio+' '+l.modelo+' '+l.color+' '+l.oc); if(f.length && !f.every(function(w){ return t.indexOf(w)>=0; })) return;
     if(S.fModeloL && l.modelo!==S.fModeloL) return;
@@ -883,6 +902,8 @@ function filtrarLotes(f){
     if(S.fAtrL && l.estado!=='Atrasado') return;
     /* Pendientes = a mi área le falta algo en ese lote; Terminados = mi área ya hizo todas sus fases */
     if(miArea()!=='Todas' && (avanceLote(l)[miArea()]>=1) !== !!S.verListos) return;
+    /* Lo que le mandaron a mi área va primero, aparte, para que no se confunda de lote */
+    if(!S.verListos && miArea()!=='Todas' && llegadaDe(l).length){ arriba.push(i); return; }
     var k=l.oc+'|'+l.semana; if(!grupos[k]){ grupos[k]=[]; orden.push(k); } grupos[k].push(i);
   });
   orden.sort(function(a,b){ var A=a.split('|'),B=b.split('|'); if((A[0]==='ADELANTO')!==(B[0]==='ADELANTO')) return A[0]==='ADELANTO'?1:-1; return A[0]===B[0] ? (Number(A[1])||0)-(Number(B[1])||0) : (A[0]<B[0]?-1:1); });
@@ -897,13 +918,13 @@ function filtrarLotes(f){
     ids.forEach(function(i){ tot+=S.datos.lotes[i].cantidad; emp+=Math.min(S.datos.lotes[i].empacadas||0,S.datos.lotes[i].cantidad); });
     if(p[0]==='ADELANTO') r+='<div class="oc semana adelanto'+(verde?' lista':'')+'"><span class="num">A</span><div><div class="tit">Adelantos'+(verde?' · terminados':'')+'</div><span>'+tot+' urnas · llegan hasta antes de mandar a fondo y pasan al estante</span></div></div>';
     else r+='<div class="oc semana'+(verde?' lista':'')+'"><span class="num">S'+esc(p[1])+'</span><div><div class="tit">Semana '+esc(p[1])+(verde?' · terminada':'')+'</div><span>'+(verde?'Pedido '+esc(p[0])+' · ':'')+tot+' urnas · empacadas '+emp+'</span></div></div>';
-    ids.forEach(function(i){
-      var l=S.datos.lotes[i];
-      r+='<button class="lote" onclick="detalle('+i+')"><div class="fila">'+silTile(l.modelo,l.color,42)+'<b>'+esc(corto(l.folio))+'</b>'+tagEstado(l.estado)+ic('chev',18)+'</div>'+
-         '<span class="cant">'+l.cantidad+' piezas</span>'+(function(){ var x=llegadaDe(l), n=x.reduce(function(a,y){ return a+y.pend; },0); return n?'<span class="tag t-lleg">Te mandaron '+n+' piezas</span>':''; })()+trackLote(l)+'</button>';
-    });
+    ids.forEach(function(i){ r+=loteCard(i,false); });
     return r;
   };
+  if(arriba.length){
+    arriba.sort(function(a,b){ var A=envioInfo(S.datos.lotes[a].folio), B=envioInfo(S.datos.lotes[b].folio); return (B?B.t:0)-(A?A.t:0); });
+    h+='<div class="oc pedido lleg">'+ic('entra',18)+' TE MANDARON · TRABAJA ESTOS PRIMERO</div>'+arriba.map(function(i){ return loteCard(i,true); }).join('');
+  }
   var ocAnt=null;
   activas.forEach(function(k){
     var oc=k.split('|')[0];
