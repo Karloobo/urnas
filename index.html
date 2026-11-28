@@ -254,7 +254,10 @@
   .rg-cab>svg{flex:none;color:var(--yx);transition:transform .15s}.reg-grupo.abierto .rg-cab>svg{transform:rotate(180deg)}
   .rg-cuerpo{padding:0 10px 4px;border-top:1px solid var(--line)}.rg-cuerpo .card.reg{border:0;border-bottom:1px solid var(--line);border-radius:0;margin:0;padding-left:4px;padding-right:4px}
   .rg-cuerpo .card.reg:last-child{border-bottom:0}
-  .lleg-info .sil{width:40px;height:40px}.lleg-info{gap:8px}.lleg-info .lleg-n{min-width:0;font-size:26px}
+  .lleg-lote{border-top:1px solid var(--line)}
+  .lleg-cab2{width:100%;display:flex;align-items:center;gap:10px;padding:10px 2px;text-align:left;background:none;min-height:58px}
+  .lleg-cab2 .sil{width:44px;height:44px}.lleg-cab2>svg{flex:none;color:var(--narTx);transition:transform .15s}.lleg-lote.abierto .lleg-cab2>svg{transform:rotate(180deg)}
+  .lleg-lote .lleg-fila{padding-left:14px}.lleg-lote .lleg-fila:first-of-type{border-top:1px dashed var(--line)}
   .ya-info{display:flex;gap:8px;align-items:flex-start;background:var(--azS);color:var(--tx);border-radius:10px;padding:10px 12px;margin:8px 0;font-size:15px;line-height:1.4}
   .ya-info svg{flex:none;margin-top:2px;color:var(--yx)}.ya-info.ok{background:var(--okbg)}.ya-info.ok svg{color:var(--ok)}
   .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;margin:8px 0 2px;-webkit-overflow-scrolling:touch}
@@ -278,7 +281,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.20';
+var VERSION = '4.21';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -729,13 +732,24 @@ function llegadasHtml(){
   var de={}; ls.forEach(function(x){ de[x.de]=1; });
   var tot=ls.reduce(function(a,x){ return a+x.conf; },0);
   var h='<div class="llegada"><div class="lleg-cab">'+ic('entra',26)+'<div><b>Te mandaron de '+esc(Object.keys(de).join(' y '))+'</b><span>'+tot+' piezas por confirmar</span></div></div>';
-  ls.slice(0,8).forEach(function(x,k){
-    h+='<div class="lleg-fila"><button class="lleg-info" onclick="S.verListos=false;detalle('+x.i+',\''+x.pieza+'\')">'+silTile(x.l.modelo,x.l.color,34)+'<span class="lleg-n">'+x.conf+'</span><span class="lleg-t"><b>'+esc(x.nom)+' · '+esc(corto(x.l.folio))+'</b><small>para '+esc(nomFase(x.fase))+'</small></span></button>'+
-       '<button class="lleg-ok" onclick="recibi('+k+')">'+ic('check',20,0,3)+'Recibí</button></div>';
+  /* Agrupado por lote: una tarjeta con la silueta; al tocarla se ven las piezas y su botón Recibí */
+  var orden=[], grupos={}; S.llegAbiertas=S.llegAbiertas||{};
+  ls.forEach(function(x,k){ var f=x.l.folio; if(!grupos[f]){ grupos[f]=[]; orden.push(f); } grupos[f].push(k); });
+  S.llegGrupos=orden;
+  orden.slice(0,8).forEach(function(f,g){
+    var ks=grupos[f], l=ls[ks[0]].l, n=ks.reduce(function(a,k){ return a+ls[k].conf; },0);
+    var ab = orden.length===1 || !!S.llegAbiertas[f];
+    h+='<div class="lleg-lote'+(ab?' abierto':'')+'"><button class="lleg-cab2" aria-expanded="'+ab+'" onclick="toggleLleg('+g+')">'+silTile(l.modelo,l.color,34)+
+       '<span class="lleg-t"><b>'+esc(corto(l.folio))+'</b><small>'+n+' piezas · '+ks.map(function(k){ return esc(ls[k].nom)+' '+ls[k].conf; }).join(', ')+'</small></span>'+ic('down',22,0,2.5)+'</button>';
+    if(ab) ks.forEach(function(k){ var x=ls[k];
+      h+='<div class="lleg-fila"><button class="lleg-info" onclick="S.verListos=false;detalle('+x.i+',\''+x.pieza+'\')"><span class="lleg-n">'+x.conf+'</span><span class="lleg-t"><b>'+esc(x.nom)+'</b><small>para '+esc(nomFase(x.fase))+'</small></span></button>'+
+         '<button class="lleg-ok" onclick="recibi('+k+')">'+ic('check',20,0,3)+'Recibí</button></div>'; });
+    h+='</div>';
   });
-  if(ls.length>8) h+='<div class="sub" style="margin:8px 0 0">…y '+(ls.length-8)+' más. Confirma estas primero.</div>';
+  if(orden.length>8) h+='<div class="sub" style="margin:8px 0 0">…y '+(orden.length-8)+' lotes más. Confirma estos primero.</div>';
   return h+'</div>';
 }
+function toggleLleg(g){ var f=S.llegGrupos[g]; S.llegAbiertas[f]=!S.llegAbiertas[f]; menu(); }
 /* Confirmar lo que llegó: "Sí, llegaron N" o escribir otra cantidad */
 function recibi(k, otra){
   var x=(S.porConfirmar||[])[k]; if(!x) return;
