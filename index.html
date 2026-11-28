@@ -246,6 +246,8 @@
   .adel-aviso>svg{color:var(--yx);flex:none}.adel-aviso .chico{flex:none;padding:10px 16px;border-radius:10px;font-weight:700}
   .adel-fila{align-items:center;gap:12px}.adel-fila>div{flex:1}.adel-prev{display:flex;justify-content:center;margin:4px 0 2px}.adel-prev .sil{width:76px;height:76px}
   .seg.col1{flex-direction:column}
+  .oc.semana.adelanto .num{background:var(--nar)}
+  h3.sec{margin:22px 0 4px;font-size:19px}
   .ya-info{display:flex;gap:8px;align-items:flex-start;background:var(--azS);color:var(--tx);border-radius:10px;padding:10px 12px;margin:8px 0;font-size:15px;line-height:1.4}
   .ya-info svg{flex:none;margin-top:2px;color:var(--yx)}.ya-info.ok{background:var(--okbg)}.ya-info.ok svg{color:var(--ok)}
   .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;margin:8px 0 2px;-webkit-overflow-scrolling:touch}
@@ -269,7 +271,7 @@
 /* ====== Conexión con tu hoja de Google (Apps Script) ======
    Si algún día cambias el enlace de Apps Script, cámbialo solo aquí. */
 var API_URL = 'https://script.google.com/macros/s/AKfycbxJx7SON8zk1Cg_Kz1qXxUC-HbdBosEfj27PFDOpbeavj2bDZT6XF52Gx-NRSSadoPF/exec';
-var VERSION = '4.18';
+var VERSION = '4.19';
 
 function llamarApi(accion, rec){
   var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -528,6 +530,10 @@ function fasesDeRec(r){
 function aplicarRecLocal(r){
   if(!S.datos) return;
   if(r.tipo==='avance') fasesDeRec(r).forEach(function(x){ avanzarLocal(r.folio,x.pieza,x.fase); sumarHecho(r.folio,x.pieza,x.fase,x.cant); });
+  if(r.tipo==='avance' && !r.adel){
+    var la=(S.datos.lotes||[]).filter(function(x){ return x.folio===r.folio && x.adelanto; })[0];
+    if(la) fasesDeRec(r).forEach(function(x){ var b=fasesBase(la,x.pieza); if(b.length && x.fase===b[b.length-1]) sumarAdelLocal(la.modelo,x.pieza,x.fase,'Sin pintar',x.cant); });
+  }
   if(r.tipo==='avance' && r.adel) sumarAdelLocal(r.adel.modelo,r.pieza,r.adel.faseOrigen,r.adel.color,-(Number(r.cantidad)||0));
   if(r.tipo==='adelantada') sumarAdelLocal(r.modelo,r.pieza,r.fase,r.color,(r.mov==='Baja'?-1:1)*(Number(r.cantidad)||0));
 }
@@ -858,7 +864,7 @@ function filtrarLotes(f){
     if(miArea()!=='Todas' && (avanceLote(l)[miArea()]>=1) !== !!S.verListos) return;
     var k=l.oc+'|'+l.semana; if(!grupos[k]){ grupos[k]=[]; orden.push(k); } grupos[k].push(i);
   });
-  orden.sort(function(a,b){ var A=a.split('|'),B=b.split('|'); return A[0]===B[0] ? (Number(A[1])||0)-(Number(B[1])||0) : (A[0]<B[0]?-1:1); });
+  orden.sort(function(a,b){ var A=a.split('|'),B=b.split('|'); if((A[0]==='ADELANTO')!==(B[0]==='ADELANTO')) return A[0]==='ADELANTO'?1:-1; return A[0]===B[0] ? (Number(A[1])||0)-(Number(B[1])||0) : (A[0]<B[0]?-1:1); });
   /* Una semana está completa cuando todos sus lotes ya están empacados (Terminado):
      esas se van al final, en verde y plegadas, para que no estorben */
   var semanaLista=function(k){ var p=k.split('|');
@@ -868,7 +874,8 @@ function filtrarLotes(f){
   var pintarSemana=function(k, verde){
     var p=k.split('|'), ids=grupos[k], tot=0, emp=0, r='';
     ids.forEach(function(i){ tot+=S.datos.lotes[i].cantidad; emp+=Math.min(S.datos.lotes[i].empacadas||0,S.datos.lotes[i].cantidad); });
-    r+='<div class="oc semana'+(verde?' lista':'')+'"><span class="num">S'+esc(p[1])+'</span><div><div class="tit">Semana '+esc(p[1])+(verde?' · terminada':'')+'</div><span>'+(verde?'Pedido '+esc(p[0])+' · ':'')+tot+' urnas · empacadas '+emp+'</span></div></div>';
+    if(p[0]==='ADELANTO') r+='<div class="oc semana adelanto'+(verde?' lista':'')+'"><span class="num">A</span><div><div class="tit">Adelantos'+(verde?' · terminados':'')+'</div><span>'+tot+' urnas · llegan hasta antes de mandar a fondo y pasan al estante</span></div></div>';
+    else r+='<div class="oc semana'+(verde?' lista':'')+'"><span class="num">S'+esc(p[1])+'</span><div><div class="tit">Semana '+esc(p[1])+(verde?' · terminada':'')+'</div><span>'+(verde?'Pedido '+esc(p[0])+' · ':'')+tot+' urnas · empacadas '+emp+'</span></div></div>';
     ids.forEach(function(i){
       var l=S.datos.lotes[i];
       r+='<button class="lote" onclick="detalle('+i+')"><div class="fila">'+silTile(l.modelo,l.color,42)+'<b>'+esc(corto(l.folio))+'</b>'+tagEstado(l.estado)+ic('chev',18)+'</div>'+
@@ -879,7 +886,7 @@ function filtrarLotes(f){
   var ocAnt=null;
   activas.forEach(function(k){
     var oc=k.split('|')[0];
-    if(oc!==ocAnt){ h+='<div class="oc pedido">PEDIDO '+esc(oc)+'</div>'; ocAnt=oc; }
+    if(oc!==ocAnt){ h+='<div class="oc pedido">'+(oc==='ADELANTO'?'SIN PEDIDO · ADELANTOS':'PEDIDO '+esc(oc))+'</div>'; ocAnt=oc; }
     h+=pintarSemana(k,false);
   });
   if(listas.length){
@@ -1098,6 +1105,7 @@ function fasesDe(l,pieza){
   var lista=(S.datos.fases[pieza]||[]).filter(function(f){ return faseAplica(l.modelo,pieza,f); });
   if(pieza!=='Techo' && !l.techo) lista=lista.filter(function(f){ return !esFaseTecho(pieza,f); });
   if(S.datos.faseEmpaque) lista=lista.filter(function(f){ return f!==S.datos.faseEmpaque; });
+  lista=cortarAdelanto(l,lista);
   if(areaFases()!=='Todas'){ var a=areaFases(); var sol=lista.filter(function(f){ var x=areaDeFase(pieza,f); return !x || x===a; }); lista=sol; }
   return lista;
 }
@@ -1116,7 +1124,13 @@ function fasesBase(l,pieza){
   var lista=(S.datos.fases[pieza]||[]).filter(function(f){ return faseAplica(l.modelo,pieza,f); });
   if(pieza!=='Techo' && !l.techo) lista=lista.filter(function(f){ return !esFaseTecho(pieza,f); });
   if(S.datos.faseEmpaque) lista=lista.filter(function(f){ return f!==S.datos.faseEmpaque; });
-  return lista;
+  return cortarAdelanto(l,lista);
+}
+/* Adelanto sin pedido: solo las fases antes de la primera "Mandar…" */
+function cortarAdelanto(l,lista){
+  if(!l.adelanto) return lista;
+  var k=-1; lista.some(function(f,j){ if(/^mandar/i.test(nomFase(f))){ k=j; return true; } });
+  return k>=0 ? lista.slice(0,k) : lista;
 }
 function bloque(l,pieza,area){
   var lista=fasesBase(l,pieza), j=lista.indexOf(l.av[pieza])+1;
@@ -1180,7 +1194,7 @@ function detalleFase(i,pieza){
   S.pieza=pieza||S.pieza||piezasOk[0][0];
   if(!piezasOk.some(function(p){ return p[0]===S.pieza; })) S.pieza=piezasOk[0][0];
   var h='<button class="back" onclick="lotes()">'+ic('back',18,0,3)+'Lotes</button>'+
-    '<div class="lotebox con-sil">'+silTile(l.modelo,l.color,56)+'<div><h2 class="lb-nom">'+esc(corto(l.folio))+'</h2><div class="lb-sem">Semana '+esc(l.semana)+' · '+l.cantidad+' piezas · '+esc(l.oc)+'</div></div></div>';
+    '<div class="lotebox con-sil">'+silTile(l.modelo,l.color,56)+'<div><h2 class="lb-nom">'+esc(corto(l.folio))+'</h2><div class="lb-sem">'+(l.adelanto?'Adelanto sin pedido · '+l.cantidad+' piezas':'Semana '+esc(l.semana)+' · '+l.cantidad+' piezas · '+esc(l.oc))+'</div></div></div>';
   h+='<label class="paso"><i>1</i>¿Qué pieza?</label><div class="seg piezas"'+(piezasOk.length===3?' style="grid-template-columns:1fr 1fr 1fr"':'')+'>';
   piezasOk.forEach(function(p){
     var base=fasesBase(l,p[0]), a=l.av[p[0]], fin=base.length && a===base[base.length-1];
@@ -1189,7 +1203,8 @@ function detalleFase(i,pieza){
     h+='<button class="'+(S.pieza===p[0]?'on':'')+(lista0||fin?' lista':'')+'" onclick="detalleFase('+i+',\''+p[0]+'\')"><b class="pz">'+p[1]+'</b>'+trackPieza(l,p[0])+'<small>'+esc(est)+'</small>'+(function(){ var x=llegadaDe(l,p[0])[0]; return x?'<small class="pz-lleg">Te mandaron '+x.pend+'</small>':''; })()+'</button>';
   });
   h+='</div>';
-  h+=adelAvisoHtml(l,i);
+  if(l.adelanto){ var bA=fasesBase(l,S.pieza); h+='<div class="ya-info">'+ic('box',18)+'<span><b>Adelanto sin pedido.</b> Aquí solo se registra hasta '+(bA.length?'<b>'+esc(nomFase(bA[bA.length-1]))+'</b>':'antes de mandar a fondo')+'. Al registrar esa fase, las piezas entran solas a Piezas adelantadas.</span></div>'; }
+  else h+=adelAvisoHtml(l,i);
   var lista=fasesDe(l,S.pieza), base=fasesBase(l,S.pieza), act=l.av[S.pieza], ci=base.indexOf(act);
   var termino = base.length && ci===base.length-1;
   /* siguiente fase de su área después de la fase en que va la pieza */
@@ -1411,8 +1426,44 @@ function adelantadas(){
     h+='<div class="card reg adel-fila">'+silTile(a.modelo,a.color,44)+'<div><b>'+a.cantidad+' · '+esc(nomPieza(a.pieza))+'</b> · '+esc(a.modelo)+'<br><small>Llegaron a '+esc(nomFase(a.fase))+' · '+esc(a.color)+'</small></div>'+
        '<button class="bR chico" onclick="altaAdel('+k+',\'Baja\')">Sacar</button></div>';
   });
-  h+='<p class="sub">Todo queda en la pestaña <b>Adelantadas</b> de la hoja.</p>';
+  if(servidorConAdelantos()){
+    var abiertos=(S.datos.lotes||[]).filter(function(l){ return l.adelanto; });
+    h+='<h3 class="sec">Adelantar producción (sin pedido)</h3><p class="sub">Para trabajar urnas sin orden de compra. Se trabajan hasta antes de mandar a fondo y entran solas a este estante.</p>'+
+       '<button class="big b2" onclick="abrirAdelanto()">'+ic('plus',28)+'<span>Abrir un adelanto<small>Modelo y cuántas urnas</small></span></button>';
+    S.adelAbiertos=abiertos;
+    abiertos.forEach(function(l,k){
+      var a=avanceLote(l), p=Math.round(Math.min(1,(a.Corte+a.Lijado)/2)*100);
+      h+='<div class="card reg adel-fila">'+silTile(l.modelo,'Sin pintar',44)+'<div><b>'+esc(corto(l.folio))+'</b><br><small>'+l.cantidad+' urnas · '+esc(l.estado)+' · '+p+'%</small></div>'+
+         '<button class="b2 chico" onclick="cerrarAdelanto('+k+')">Cerrar</button></div>';
+    });
+  }
+  h+='<p class="sub">Todo queda en las pestañas <b>Adelantadas</b> y <b>Adelantos</b> de la hoja.</p>';
   pantalla(h);
+}
+function servidorConAdelantos(){ return S.datos && !versionMenor(S.datos.version,'4.19'); }
+function abrirAdelanto(){
+  var ms=(S.datos.modelos||[]).map(function(m){ return m.nombre; });
+  var h='<button class="back" onclick="adelantadas()">'+ic('back',18,0,3)+'Piezas adelantadas</button><h2>Abrir un adelanto</h2>'+
+    '<p class="sub">Aparece en <b>Lotes</b>, en la sección "Sin pedido · Adelantos". Se registra igual que un lote, pero solo hasta antes de mandar a fondo.</p>'+
+    '<label class="paso"><i>1</i>Modelo</label><select id="aoMod">'+ms.map(function(m){ return '<option>'+esc(m)+'</option>'; }).join('')+'</select>'+
+    '<label class="paso"><i>2</i>¿Cuántas urnas?</label>'+stepper('cant',0,true)+
+    '<label>Nota (opcional)</label><input type="text" id="aoNota" maxlength="150" placeholder="Ej. para el pedido de diciembre">'+
+    '<div class="fijo"><div id="err" class="err"></div><div class="btnrow"><button class="b3" onclick="guardarAdelanto()">'+ic('check',24,0,3)+'<span>Abrir adelanto</span></button></div></div>';
+  pantalla(h);
+}
+function guardarAdelanto(){
+  var m=$('aoMod').value, cant=parseInt($('cant').value,10)||0, nota=$('aoNota').value.trim();
+  if(!m){ $('err').textContent='Elige el modelo.'; return; }
+  if(cant<=0){ $('err').textContent='Escribe cuántas urnas (más de 0).'; return; }
+  preguntar([['Modelo',m],['Urnas',cant]].concat(nota?[['Nota',nota]]:[]), [], function(){
+    encolar({ id:uid(), tipo:'adelanto', mov:'Abrir', nombre:S.nombre, ts:new Date().toISOString(), modelo:m, cantidad:cant, nota:nota }, 'Abrió adelanto · '+cant+' '+m, 'adelanto');
+  }, { titulo:'¿Abrir este adelanto?', sub:'Se trabaja sin pedido, hasta antes de mandar a fondo', si:ic('check',22,0,3)+'Sí, abrir' });
+}
+function cerrarAdelanto(k){
+  var l=S.adelAbiertos[k]; if(!l) return;
+  preguntar([['Adelanto',corto(l.folio)],['Estado',l.estado]], [l.estado!=='Terminado'?'Todavía no termina: lo que no se haya registrado hasta la última fase no entra al estante.':''], function(){
+    encolar({ id:uid(), tipo:'adelanto', mov:'Cerrar', nombre:S.nombre, ts:new Date().toISOString(), folio:l.folio, cantidad:0 }, 'Cerró adelanto · '+corto(l.folio), 'adelanto');
+  }, { titulo:'¿Cerrar este adelanto?', sub:'Deja de aparecer en Lotes. Lo que ya entró al estante se queda.', si:'Sí, cerrar', peligro:true });
 }
 /* Alta (guardar en el estante) o baja (sacar: se dañaron o se contaron mal) */
 function altaAdel(k,mov){
@@ -1843,6 +1894,7 @@ function confirmar(enviado,resumen){
   else if(S.ultimo==='empacado'){ h+='<button class="big b1" onclick="empacado()">Registrar otro empacado</button>'; }
   else if(S.ultimo==='almacen'){ h+='<button class="big b1" onclick="almacen(null,\'Salida\')">Tomé otro material</button>'; }
   else if(S.ultimo==='entrada'){ h+='<button class="big b1" onclick="entrada()">Registrar otra entrada</button>'+(S.desdeEnc?'<button class="big b2" onclick="vistaEncargado()">'+ic('key')+'Vista de encargado</button>':''); }
+  else if(S.ultimo==='adelanto'){ if(enviado) cargarDatos(function(){}); h+='<button class="big b1" onclick="cargarDatos(adelantadas)">'+ic('box')+'Ver piezas adelantadas</button><button class="big b2" onclick="lotes()">Ir a Lotes</button>'; }
   else if(S.ultimo==='adelantada'){ h+='<button class="big b1" onclick="altaAdel()">Guardar otras piezas</button><button class="big b2" onclick="adelantadas()">'+ic('estante')+'Ver piezas adelantadas</button>'; }
   else if(S.ultimo==='terminado'){ h+='<button class="big b1" onclick="terminados()">Otro movimiento de terminados</button>'; }
   else if(S.ultimo==='problema'){ h+='<button class="big b1" onclick="problema()">Reportar otro problema</button>'; }
@@ -1873,7 +1925,7 @@ function regHtml(x, tag){
   return '<div class="card reg"><div><b>'+esc(x.cuando)+'</b> '+(tag||'')+(esAdmin()&&x.nombre?' <span class="quien">'+esc(x.nombre)+'</span>':'')+(!esAdmin()&&x.por?' <span class="quien">lo registró '+esc(x.por)+'</span>':'')+'<br>'+esc(x.texto)+'</div>'+
     (x.puede?'<button class="bR chico" onclick="anularReg(\''+esc(x.id)+'\', misRegistros)">Anular</button>':'')+'</div>';
 }
-var TIPO_NOM={avance:'Avance',estante:'Estante',corte:'Corte',empacado:'Empacado',almacen:'Pintura y ferretería',entrada:'Entradas',terminado:'Terminados',recibido:'Recibí',problema:'Problemas',adelantada:'Adelantadas'};
+var TIPO_NOM={adelanto:'Adelantos',avance:'Avance',estante:'Estante',corte:'Corte',empacado:'Empacado',almacen:'Pintura y ferretería',entrada:'Entradas',terminado:'Terminados',recibido:'Recibí',problema:'Problemas',adelantada:'Adelantadas'};
 function diaDe(r){ var m=String(r.cuando||'').match(/^(\d\d\/\d\d)/); return m?m[1]:''; }
 function ddmm(d){ return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2); }
 /* Filtros de registros: buscar texto, tipo, día y (encargado) de quién */
